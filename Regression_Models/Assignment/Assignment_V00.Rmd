@@ -1,0 +1,573 @@
+---
+title: "INFLUENCE OF AUTOMATIC OR MANUAL TRANSMISSION ON THE CONSUMPTION IN MILES PER GALLON IN THE AUTOMOTIVE INDUSTRIE IN THE UNITED STATES"
+output: html_document
+---
+Version: V00
+
+Date: 25-JAN-2015
+
+GitHub Repository: https://github.com/A6111E/datasciencecoursera/tree/master/Regression_Models
+
+Data Source: R Data Set Package "data sets" - Data: "mtcars"
+
+#### Synopsis:
+In the attempt to predict gasoline mileage for 1973 - 1974 automobiles, road tests were preformed by Motor Trend US Magazine, in which gas mileage and 10 physical characteristics of various types of automobiles were recorded.
+
+**Source:**
+Biometrics Invited Paper: The Analysis and Selection of Variables in Linear Regression
+by R. R. Hocking
+Biometrics - Vol. 32, No. 1 (Mar., 1976), pp. 
+
+**DataSet Description:** Extracted from Motor Trend US Magazine in 1.974 and comprises fuel  consumption, 10 different aspects of automobile design and performance for 32 automobiles (1973-74 models).
+
+**- Data Frame:** $32$ observations - $11$ variables
+
+**- Variable [mpg]:** numeric - mpg (miles per US gallon)
+
+**- Variable [cyl]:** numeric - Number of Cylinders
+
+**- Variable [disp]:** numeric - Cylinder Displacement (cu.in)
+
+**- Variable [hp]:** numeric - Gross Horsepower (hp)
+
+**- Variable [drat]:** numeric - Rear Axle ratio 
+
+**- Variable [wt]:** numeric - Weight (lb/1000)
+
+**- Variable [qsec]:** numeric - 1/4 Mile Time (sec)
+
+**- Variable [vs]:** numeric - Cylinder Configuration (V - S: straight ) (0 = V, 1 = S)
+
+**- Variable [am]:** numeric - Transmission (0 = automatic, 1 = manual)
+
+**- Variable [gear]:** numeric - Number of forward Gears
+
+**- Variable [carb]:** numeric - Number of Carburetors
+
+With this data set, this research tries to answer:
+
+1. Is an automatic or manual transmission better for MPG (gas mileage)?
+
+2. Quantify the MPG (gas mileage) difference between automatic and manual transmissions
+
+### Executive Summary:
+
+- After a Exploratory Analysis and Model Finding, the best linear model, that predict the gasoline mileage for this data set is:
+
+$$mpg = 9.62 - 3.92wt + 1.23qsec + 2.94am$$
+
+- An Adjusted $R^2 = 0.83$, indicates that **$83.36%$** of the variance in the outcome variable $mpg$ can be explained by the predictors variables $wt, qsec, am$ and this linear model.
+
+- The **Manual Transmission** is more efficient than the **Automatic Tranmission** in $2.94 miles/gal$
+
+### Exploratory Analysis:
+```{r Call required libraries, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+library(datasets)               # Different DataSets
+library(data.table)             # Extension of data frame
+library(ggplot2)                # Plotting
+library(xtable)                 # For generating tables knitr
+library(knitr)                  # Markdown
+library(gridExtra)              # Grid for graphics
+library(plyr)                   # Tools for splitting, applying and combining data
+library(GGally)                 # Extension to ggplot2
+library(car)                    # Companion to Applied Regression
+library(gtools)                 # Various R Programming Tools
+```
+
+```{r knitr Setup, include = FALSE, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+
+opts_chunk$set(
+        fig.path = "graphs/plot_",                                         
+        fig.height = 5, fig.width = 10, 
+        options(scipen = 1, digits = 2),
+        cache.path = "cache/",
+        cache = FALSE
+        )
+```
+
+```{r Clean Up Workspace, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+rm(list = ls())
+gc()
+```
+
+```{r Creates Working Directories, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+dir.create("data")              # Source Data
+dir.create("docs")              # Document files
+dir.create("reports")           # Report files
+dir.create("code")           # Code files
+
+# Other Directories: created by code (graphs / cache)
+```
+
+```{r Load DataSet, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+system.time({
+mtcars <- as.data.table(mtcars)        # Source: DataSet R Package
+list2env(mtcars , envir = .GlobalEnv)
+
+write.table(mtcars, "./reports/mtcars.txt", row.names = FALSE , 
+            sep = ",")
+
+# Summary Mileage per US Gallon - per Trasnmission Type (Manual = 1 / Automatic = 0)
+mpg_transType <- subset(mtcars, select = c("mpg", "am"))
+write.table(mpg_transType, "./reports/Mileage_per_US_Gallon_TType.txt", row.names = FALSE , sep = ",")
+})
+```
+
+```{r Data Class, dependson="loadData", echo = FALSE, results = "hide"}
+sapply(mtcars[1,],class)
+sum(is.na(mtcars))
+```
+
+#### Table 1: Data Preview 
+```{r Data Preview, echo = FALSE, results = "asis", tidy = FALSE}
+xt <- xtable(head(mtcars))
+print(xt, type = "html", floating = FALSE)
+```
+
+```{r Exploratory Data_1, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+g1 <- ggpairs(mtcars, columns = c(1:11), diag = list(continuous = "density", params = c(colour="red")), upper = list(continuous = "cor", params = c(size = 3.5), axisLabels= "show"), title = "", lower=list(continuous="smooth", params=c(colour="blue")))
+
+# Putting Axis Text Blank
+g1 <- g1 + theme(axis.text.y = element_blank(), axis.title.y = element_blank())
+g1 <- g1 + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
+
+# Box Plot Mileage per US Gallon ~ Automatic / Manual Transmission
+g2 <- ggplot(data = mtcars, aes(y = mpg, x = am, fill = factor(am)))
+g2 <- g2 + geom_boxplot(colour = "black", size = 0.8)
+g2 <- g2 + xlab("Transmission Type: 0: Automatic 1: Manual") + ylab("Miles per US Gallon")
+
+```
+
+```{r Exploratory Data_2, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+loopLength <- length(sapply(mtcars[1,],class)) - 1
+sta_coeff <- NULL
+        
+for (i in 1:loopLength) {
+        j <- 1 + i
+        
+        # Linear Model
+        fit <- lm(paste("mtcars$mpg ~ mtcars$", colnames(mtcars)[j], sep=""))
+        sumCoef <- summary(fit)$coefficients    # Coefficients Summary
+        sumCorr <- summary(fit, correlation = TRUE)$correlation         # Correlation
+        
+        beta0 <- sumCoef[1]     # Intercept
+        beta1 <- sumCoef[2]     # Slope
+        
+        R2 <- summary(fit)$r.squared    # R2
+
+        adjR2 <- summary(fit)$adj.r.squared     # Adjusted R2
+        
+        # Correlation
+        y <- as.vector(subset(mtcars, select = "mpg"))
+        x <- as.vector(subset(mtcars, select = colnames(mtcars)[j]))
+        
+        corr <- cor(y, x)    #Correlation
+        
+        sig <- summary(fit)$sigma    # Sigma
+        
+        sta_coeff <- rbind(sta_coeff, c(colnames(mtcars)[j], round(beta0,3), 
+                                round(beta1,3), round(R2, 3), round(adjR2, 3), 
+                                round(corr, 3), round(sig, 3)))
+                }        
+```
+ 
+```{r Exploratory Data_3, echo = FALSE, results = "asis", tidy = FALSE}
+sta_coeff <- as.data.frame(sta_coeff)
+
+# Changing Columns from Factor to Numeric
+sta_coeff$V2 = as.numeric(as.character(sta_coeff$V2))
+sta_coeff$V3 = as.numeric(as.character(sta_coeff$V3))
+sta_coeff$V4 = as.numeric(as.character(sta_coeff$V4))
+sta_coeff$V5 = as.numeric(as.character(sta_coeff$V5))
+sta_coeff$V6 = as.numeric(as.character(sta_coeff$V6))
+sta_coeff$V7 = as.numeric(as.character(sta_coeff$V7))
+
+# Changing Column Names
+colNames <- c("Variable", "Intercept_Beta0", "Slope_Beta1", "R^2", "Adjusted_R2",
+              "Correlation", "Sigma")
+
+setnames(sta_coeff,colNames)
+
+# Sort by Correlation
+# sapply(sta_coeff[1,],class)     # Class Test
+
+sta_coeff <- sta_coeff[with(sta_coeff, order(-abs(Correlation))), ]
+```
+
+```{r Exploratory Data_4, echo = FALSE, results = "asis", tidy = FALSE}
+# Testing Results
+
+fit1 <- lm(mtcars$mpg ~ mtcars$cyl)
+
+sumCoef <- summary(fit1)$coefficients    # Coefficients Summary
+sumCorr <- summary(fit1, correlation = TRUE)$correlation         # Correlation
+        
+beta0 <- sumCoef[1]     # Intercept
+beta1 <- sumCoef[2]     # Slope
+        
+R2 <- summary(fit1)$r.squared    # R2
+        
+corr <- sumCorr[2,1]    #Correlation
+
+corr <- cor(mtcars$mpg, mtcars$cyl)
+
+sig <- summary(fit1)$sigma    # Sigma
+```
+
+```{r Exploratory Data_5, echo = FALSE, results = "asis", tidy = FALSE}
+# Creates Variable Names according with Correlation descending order
+vector <- as.list(sta_coeff[,"Variable"])
+
+names(vector) <- paste("var", 1:length(vector), sep = "")
+
+list2env(vector , envir = .GlobalEnv)
+```
+
+```{r Exploratory Data_6, echo = FALSE, results = "asis", tidy = FALSE}
+# Creates LineAr Model Combinations
+vars <- as.vector(colnames(mtcars))
+
+N <- as.list(1:(length(vars)-1))
+COMB <- sapply(N, function(m) combn(x = vars[2:length(vars)], m))
+COMB2 <- list()
+k <- 0
+
+for(i in seq(COMB)){
+    tmp <- COMB[[i]]
+    for(j in seq(ncol(tmp))){
+        k <- k + 1
+        COMB2[[k]] <- formula(paste("mpg", "~", paste(tmp[,j], collapse = " + ")))
+    }
+}
+
+possComb <- as.data.frame(matrix(unlist(COMB2), nrow = length(COMB2), byrow = TRUE))
+colNames <- c("Combinations")
+setnames(possComb,colNames)
+
+combNum <- length(COMB2)
+```
+
+- The value of cylinder is a categorical variable
+
+- Half of the cars get 19.20 miles per gallon or less (Median). 
+
+- The variability or spread for $mpg$ is equal to $\sigma = 6.02$
+
+- For the multivariate $mpg$ data, there should be some relationship with the size of the engine (# of cylinders, gross horsepower or even the cylinder displacement). 
+
+- Plotting $mpg$ ~ $cyl$, a decreasing trend on $mpg$ as the # of $cyl$ increases is obvious, and it should be a candidate fit a regression line.
+
+- The summary on table "Table A1: Statistical Data Summary - Mileage per US Gallon " included on the Appendix, shows statistical data like the mean, standard deviation, variance, median, maximal and minimal values, for each type of transmission (Automatic - Manual) in relationship with the Mileage per US Gallon (mpg).
+
+- According with this table, the maximal and minimal values for **Manual Transmission**, are higher than corresponding values for **Automatic Transmission**, although its standard deviation is greater.
+
+- Taking "Mileage per US Gallon (mpg)" as outcome, and using the other variables as predictors, statistical coefficients will be calculated for a linear model during a  exploratory analysis.
+
+- This can be observed on Graphic A1 included on the Appendix.
+
+**Initial Conclusions:**
+
+- **Manual Transmission**: higher throughput for the outcome "Mileage per US Gallon (mpg)" in compassion with the **Automatic Transmission**.
+
+- **Transmision Type (am)**: according with the Statistic Coefficients Table and related graphic (please see the Appendix), the **am** variable is the **7th** place of influence on the **mpg**  variable.
+
+- According with the correlation (please see Appendix - Table A2) for the required outcome $mpg$ and the predictors, the impact on it in descending order is: $1. `r var1`, 2. `r var2`, 3. `r var3`, 4. `r var4`, 5. `r var5`, 6. `r var6`, 7. `r var7`, 8. `r var8`, 9. `r var9`, 10. `r var10`$
+
+- The variable $qsec$ is the required time for driving $/1/4$ of mile. From physics  in general, less time means more acceleration and final speed and more gas consumption. Although this variable has the smallest correlation with $mpg$, it can not be avoided from the model analysis.  
+
+- The model with $mpg$ as outcome, should **NOT** have **ONLY** one predictor.
+
+- The number of possible combinations for this linear model is $`r combNum`$.
+
+- Due to the high number of possible combinations, it's necessary to use an algorithm (Stepwise Algorithm, where the best model corresponds to the smallest AIC).
+
+### Statistical Inference
+
+**Hypothesis 1**:
+
+- Null hypothesis $H_{01}$: is that the residuals of the calculated linear model are normally distribute and do not have trends.
+
+- Alternative Hypothesis $H_{a1}$: opposite as the null hypothesis.
+
+**Hypothesis 2**:
+
+- Null hypothesis $H_{02}$: is that the base model $mpg$ ~ $am$ (trying to answer the  main questions), is less representative that the best model ($mpg$ as outcome and several variables as predictors).
+
+- Alternative Hypothesis $H_{a2}$: opposite as the null hypothesis.
+
+### Modeling
+
+- Including all variables in an initial linear model, all p-value´s are not less than 0.05, and a linear model including all variables **is not** representative.     
+
+#### Table 2: Summary Linear Model - All Variables
+```{r Summary Linear Model, echo = FALSE, results = "asis", tidy = FALSE}
+xt <- xtable(summary(lm(mpg ~ . , data = mtcars))$coefficients) 
+print(xt, type = "html", floating = FALSE)
+```
+
+### Linear Model Selection
+```{r Model_1, echo = FALSE, results = "hide", tidy = FALSE}
+initialmodel <- lm(mpg ~ ., data = mtcars)
+bestmodel <- step(initialmodel, direction = "both")
+```
+
+```{r Model_2, echo = FALSE, tidy = FALSE}
+R2 <- summary(bestmodel)$r.squared      # R2
+adjR2 <- summary(bestmodel)$adj.r.squared       # Adjusted R2
+adjR2per <- adjR2 * 100         # Adjusted R2 in %
+remadjR2per <- 100 - adjR2per   # Remainder Adjusted R2
+sigma <- summary(bestmodel)$sigma       # Sigma
+
+sumCoef <- summary(bestmodel)$coef
+
+# Betas
+beta0 <- sumCoef[1]     # Intercept
+beta1 <- sumCoef[2]     # slope for Var2 (wt)
+beta2 <- sumCoef[3]     # slope for Var3 (qsec)
+beta3 <- sumCoef[4]     # slope for Var4 (am)
+
+# Variable Names
+var1 <- names(bestmodel$model)[1]
+var2 <- names(bestmodel$model)[2]
+var3 <- names(bestmodel$model)[3]
+var4 <- names(bestmodel$model)[4]
+
+# p_values
+p_value_var2 <- format(sumCoef[2,4], scientific = TRUE, digits = 3)
+p_value_var3 <- format(sumCoef[3,4], scientific = TRUE, digits = 3)
+p_value_var4 <- format(sumCoef[4,4], scientific = TRUE, digits = 3)
+```
+
+```{r Model_3, echo = FALSE, results = "hide", tidy = FALSE}
+# Comparassion between Real Values and Calculated Values
+est_data <- as.data.table(mtcars)
+est_data <- est_data[ ,c("cyl", "disp", "hp", "drat", "vs", "gear", "carb") := NULL]
+
+est_data$mpg_estimated <- round(beta0 + beta1*est_data$wt + beta2*est_data$qsec 
+                          + beta3*est_data$am, 3)
+
+est_data$residuals <- round(resid(bestmodel), 3)
+
+# Maximal Residual
+e <- resid(bestmodel)         # Calculates the residual
+maxResValue <- max(e) 
+minResValue <- min(e) 
+```
+
+The best fitting model for the data set has the following statistical data:
+
+- $R^2$ = `r R2`
+
+- Adjusted $R^2$ = `r adjR2`
+
+- $\sigma$ = `r sigma`
+
+- Linear Model: $`r var1` = `r beta0` `r beta1``r var2` + `r beta2``r var3` + `r beta3``r var4`$
+
+- An Adjusted $R^2$ = `r adjR2` (maximal value obtained for the best fitting linear model) value, indicates that `r adjR2per`% of the variance in the outcome variable $mpg$ can be explained by the predictors variables: $`r var2`$, $`r var3`$, $`r var4`$. 
+
+- The remaining `r remadjR2per`% can be attributed to unknown, hidden or not included  variables or inherent variability.
+
+- The p_values values are all representative:
+
+a. $pvalue(`r var2`) = `r p_value_var2`$
+
+b. $pvalue(`r var3`) = `r p_value_var3`$
+
+c. $pvalue(`r var4`) = `r p_value_var4`$
+
+- The maximal / minimal residual values are:
+
+a. Maximal: $`r maxResValue`$
+
+b. Minimal: $`r minResValue`$ 
+
+#### Statistical Inference Conclusions
+
+- The Null hypothesis $H_{01}$ *could not be rejected* (residuals of the calculated linear model are normally distribute and do not have trends).
+
+```{r Model_4, echo = FALSE, results = "hide", tidy = FALSE}
+# Anova
+basemodel <- lm(mpg ~ am, data = mtcars)
+pvalue <- anova(bestmodel, basemodel)[2,6]
+```
+
+- The Null hypothesis $H_{02}$ *could be rejected* (base model $mpg$ ~ $am$ is **NOT** representative to estimate the $mpg$).
+
+#### Final Analysis:
+
+- For defining which transmission, automatic or manual, is better for MPG (gas mileage) we have:
+
+(1) **Variable [am]:** numeric - Transmission (0 = automatic, 1 = manual)
+
+(2) **Slope [am]:** $`r beta3`$
+
+(3) **Automatic Transmission =** $`r beta3`* 0 = 0$
+replacing:
+$$`r var1` = `r beta0` `r beta1``r var2` + `r beta2``r var3`$$
+
+(4) **Manual Transmission =** $`r beta3`* 1 = `r beta3`$
+replacing:
+$$`r var1` = `r beta0` `r beta1``r var2` + `r beta2``r var3` + `r beta3``r var4`$$
+
+(5) **Findings:** taking $wt$ and $qsec$ as constant values, the **Manual Transmission** adds $`r beta3`$ $miles/gal$ in comparison with the **Automatic Tranmission**
+
+(6) In other words, the **Manual Transmission** is more efficient than the **Automatic**.
+
+- For quantifying the MPG (gas mileage) difference between automatic and manual transmissions we have:
+
+(1) **Variable [am]:** numeric - Transmission (0 = automatic, 1 = manual)
+
+(2) **Slope [am]:** $`r beta3`$
+
+(3) **Automatic Transmission =** $`r beta3` * 0 = 0$
+
+(4) **Manual Transmission =** $`r beta3`* 1 = `r beta3`$
+
+(5) **Findings:** the MPG (gas mileage) difference between automatic and manual transmissions is $`r beta3`$ $miles/gal$
+
+### Appendix
+```{r Appendix_0, echo = FALSE, results = "hide", tidy = FALSE}
+# mpg
+mean(mpg)
+summary(mpg)
+sd(mpg)
+```
+
+#### Graphic 0: Mean $mpg$ ~ $Cylinder$ 
+```{r Appendix_01, echo = FALSE, results = "asis", tidy = FALSE}
+# Cylinder
+mm <- ddply(mtcars, "cyl", summarise, mmpg = mean(mpg))
+mm$cyl <- as.factor(mm$cyl)
+
+g0 <- ggplot(mtcars, aes(x = factor(cyl), y = mpg)) + geom_point(size = 5, 
+        colour = "red") + xlab("Cylinder") + ylab("Mean MPG")
+g0 <- g0 + geom_line(data = mm, aes(x = cyl, y = mmpg, group =1))
+g0
+```
+
+#### Table A1: Statistical Data Summary - Mileage per US Gallon 
+```{r Appendix_1, echo = FALSE, results = "asis", tidy = FALSE}
+# Summary Mileage per US Gallon
+xt <- xtable(ddply(mtcars,.(am), summarize, Average = mean(mpg), Std_Deviation = sd(mpg), Variance = var(mpg), Median = median(mpg), Max = max(mpg),  Min = min(mpg)))
+print(xt, type = "html", floating = FALSE)
+```
+
+Remarks:
+
+- Transmission Type (am):  1 (Manual Transmission) - 0 (Automatic Transmission)
+
+- Average / Std_Deviation / Variance: statistic data for Mileage per US Gallon (mpg) 
+
+- GitHub Repository: /reports
+
+#### Graphic 1: Motor Trend Car Road Tests - Linear Model 
+```{r Appendix_2, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+g1
+grid.arrange(g2, nrow = 1, ncol = 2)
+```
+
+#### Table A2: Statistic Coefficients
+```{r Appendix_3, echo = FALSE, results = "asis", warning = FALSE, message = FALSE}
+print(xtable(sta_coeff), type = "html", floating = FALSE)
+
+write.table(sta_coeff, "./reports/Statistical_Data_Coefficients.txt", row.names = FALSE , sep = ",")
+```
+
+#### Table A3: Summary Best Linear Model 
+```{r Appendix_4, echo = FALSE, results = "asis", tidy = FALSE}
+print(xtable(summary(bestmodel)), type = "html", floating = FALSE)
+
+write.table(xtable(summary(bestmodel)), "./reports/Summary_BestModel.txt", row.names = FALSE , sep = ",")
+```
+
+#### Table A4: Summary Anova - Best Linear Model 
+```{r Appendix_5, echo = FALSE, results = "hide", tidy = FALSE}
+# Anova
+basemodel <- lm(mpg ~ am, data = mtcars)
+anova(basemodel, bestmodel)
+```
+
+```{r Appendix_5_1, echo = FALSE, results = "asis", tidy = FALSE}
+print(xtable(anova(basemodel, bestmodel)), type = "html", floating = FALSE)
+
+write.table(xtable(anova(basemodel, bestmodel)), "./reports/Anova_BestModel.txt", row.names = FALSE , sep = "")
+```
+
+#### Graphic A2: Best Linear Model - Residuals
+```{r Appendix_6, echo = FALSE, results = "asis", warning = FALSE, message = FALSE}
+ggplotRegression <- function (fit) {
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+  geom_point(size = 2, colour = "red", alpha = 1) +  
+  stat_smooth(method = "lm", col = "red") + 
+  geom_point(data = mtcars, aes(wt, mpg), size = 4, colour = "black", alpha = 0.4)
+  }
+
+# Plotting
+g3 <- ggplotRegression(bestmodel)
+                  
+lmodel <- paste(var1, "=", round(beta0,3), round(beta1,3), var2, "+", 
+                round(beta2,3), var3, "+", round(beta3,3), var4, sep = "")
+
+p_values <- paste(var2, "=", format(p_value_var2, scientific = TRUE, digits = 3), 
+                  ";",  
+                  var3, "=", format(p_value_var3, scientific = TRUE, digits = 3), 
+                  ";", 
+                  var4, "=", format(p_value_var4, scientific = TRUE, digits = 3), 
+                  sep = "")
+
+plotTitle <- as.character(lmodel)
+plotSubTitle1 <- as.character(c(paste("p_values:", p_values)))
+plotSubTitle2 <- as.character(c(paste("Adj R2=", round(adjR2, 3))))
+
+g3 <- g3 + labs(title = c(paste(plotTitle, " \n ",  plotSubTitle1, " \n ", 
+                        plotSubTitle2, " \n "))) 
+
+g3 <- g3 + annotate("text", label = "Original Data", x = 2.5, y = 4, size = 5, colour = "black")
+
+g3 <- g3 + annotate("text", label = "Estimated Data", x = 2.5, y = 2, size = 5, colour = "red")
+
+# Residuals mpg
+e <- resid(bestmodel)         # Calculates the residual
+
+g4 <- ggplot(mtcars, aes(x = mpg, y = e))
+g4 <- g4 + xlab("mpg")
+g4 <- g4 + ylab("Residual mpg")
+g4 <- g4 + geom_hline(yintercept = 0, size = 2)
+g4 <- g4 + geom_point(size = 4, colour = "black", alpha = 0.4)
+g4 <- g4 + geom_point(size = 2, colour = "red", alpha = 1)
+g4 <- g4 + ggtitle("mpg - Residuals")
+
+# Residuals Histogramm - Normally Distributed
+g5 <- ggplot(data = NULL, aes(x = e))
+g5 <- g5 + geom_histogram(fill = "salmon", binwidth = 1, aes(y = ..density..), 
+                        colour = "black")
+g5 <- g5 + geom_density(size = 1) + ggtitle("Histogram Residuals")
+
+# Residuals is on a straight line
+g6 <- ggplot(data = as.data.frame(qqnorm( e, plot=F)), mapping=aes(x=x, y=y)) + 
+    geom_point(size = 5) + geom_smooth(method="lm", se=FALSE, size = 1) + ggtitle("mpg - Residuals") + 
+    xlab("Theoretical Quantiles") + ylab("Sample Quantiles")
+
+grid.arrange(g3, g4, nrow = 1, ncol = 2)
+
+grid.arrange(g5, g6, nrow = 1, ncol = 2)
+```
+
+#### Table A5: Estimated Data vs Real Data 
+```{r Appendix_7, echo = FALSE, results = "asis", tidy = FALSE}
+xt <- xtable(head(est_data))
+print(xt, type = "html", floating = FALSE)
+
+write.table(est_data, "./reports/Estimated_Data_vs_Calculated_Datas.txt", row.names = FALSE , sep = ",")
+```
+
+### Session Information
+```{r Session Information, echo = FALSE}
+sessionInfo()
+```
+
+```{r Delete Temporary Directories, echo = FALSE}
+# Delete the '#' sign before unlink() to delete temp files
+unlink("tmpDir", recursive = TRUE)
+```
