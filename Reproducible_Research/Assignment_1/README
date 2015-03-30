@@ -1,0 +1,35 @@
+README:
+
+1. Data from a personal activity monitoring device. 
+
+2. This device collects data at 5 minute intervals through out the day 
+
+3. Intervals per Day: 24 x 60 / 5 = 288
+
+4. The data consists of two months of data from an anonymous individual collected
+during the months of October and Nov-2012 and include the number of steps taken 
+in 5 minute intervals each day.
+
+5. Total Observations:          Oct <- 31 days
+                                Nov <- 30 days
+                                Total Observations: 61 x 24 x 60 / 5 = 17568
+
+6. Dataset: Activity monitoring data [52K]
+https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip
+
+7. Variables / DataTables:
+- stepMean1: dataset (DT)	 mean of the total number of steps taken per day without replacing 
+ NA Values (31 obs. - 2 variables)
+- stepMedia1: media of the total number of steps taken per day without replacing 
+ NA Values
+- stepMean2: dataset (DT1) mean of the total number of steps taken per day replacing NA Values
+ with the mean per 5-minute interval (31 obs. - 2 variables).
+- stepMedia2: media of the total number of steps taken per day replacing NA Values
+with the mean per 5-minute interval.
+- step_ave_interval: dataset with the mean per 5-minute interval.
+- stepMeanDiff: dataset with the difference between stepMean2 - stepMean1, for definning the 
+impact of replacing NA values (288 obs. - 2 variables)
+- step_ave_act3: dataset without NA Values, per weekday / weekend day 
+- naValuesIni: initial NA values in dataset (DT)
+ 
+ 

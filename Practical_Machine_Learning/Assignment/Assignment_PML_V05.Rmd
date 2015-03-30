@@ -1,0 +1,644 @@
+---
+title: "Qualitative Activity Recognition"
+subtitle: Weight Lifting Exercises Prediction
+output: word_document
+---
+Version: V00
+
+Date: 22-FEB-2015
+
+GitHub Repository: https://github.com/A6111E/datasciencecoursera/tree/master/Practical_Machine_Learning
+
+Data Source: : http://groupware.les.inf.puc-rio.br/har
+
+
+
+#### Synopsis:
+The **Human Activity Recognition Research** has been focused on discriminating between different activities like sitting, standing, walking and weight lifting, to "predict" which activity was performed at a specific point in time.
+
+The **Weight Lifting Exercises** research, tries to investigate "how well" this activity was performed by 6 healthy male participants, aged between 20 - 28 years (adelmo, carlitos, charles, eurico, jeremy, pedro), by using a relatively light dumbbell (1.25kg).
+
+For data recording, four 9 degrees of freedom Razor inertial measurement units (IMU), which provide three-axes acceleration, gyroscope and magnetometer data at a joint sampling rate of 45 Hz were used.
+
+The sensors were mounted in the user's forearm, arm, lumbar belt and dumbbell and the data were recorded between November and December 2011 (11.28 to 12.05).
+
+Pls. see on-body-sensing-schema on GitHub Repository ./graphs.
+
+The reading for each sensor are: position (roll, pitch, yaw), acceleration (3 axis: x, y, z), gyroscope (3 axis: x, y, z) and magnetometer (3 axis: x, y, z).
+
+The participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions:
+
+- Class A: exactly according with the specification.
+- Class B: throwing the elbows to the front.
+- Class C: lifting the dumbbell only halfway.
+- Class D: lowering the dumbbell only halfway.
+- Class E throwing the hips to the front.
+
+Class A corresponds to the correct execution of the exercise, while the other 4 classes correspond to common mistakes. 
+
+For feature extraction it was used a sliding window approach with different lengths from 0.5 second to 2.5 seconds, with 0.5 second overlap.
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3RR4j8dvi
+
+
+**Source:**
+View LICENSE.md on GitHub Repository
+
+
+**DataSet Description:** 
+
+- **plm-training Raw Set:** $19622$ observations - $160$ variables
+
+- **plm-testing Raw Set:** $20$ observations - $160$ variables
+
+```{r Call required libraries, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+library(caret)                  # Classification and Regression Training
+library(data.table)             # Extension of Data Frame
+library(ggplot2)                # Plotting
+library(xtable)                 # For generating tables knitr
+library(knitr)                  # Markdown
+library(gridExtra)              # Grid for graphics
+library(plyr)                   # Tools for splitting, applying and combining data
+library(gtools)                 # Various R Programming Tools
+```
+
+```{r knitr Setup, include = FALSE, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+
+opts_chunk$set(
+        fig.path = "graphs/plot_",                                         
+        fig.height = 5, fig.width = 10, 
+        options(scipen = 3, digits = 4),
+        cache.path = "cache/",
+        cache = FALSE
+        )
+```
+
+```{r Clean Up Workspace_1, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+rm(list = ls())
+gc()
+```
+
+```{r Creates Working Directories, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Practical_Machine_Learning/Assignment_files")
+
+# Creates Directories
+dir.create("data")              # Source Data
+dir.create("docs")              # Document files
+dir.create("reports")           # Report files
+dir.create("code")              # Code files
+
+# Other Directories: created by code (graphs / cache)
+```
+
+### Executive Summary:
+
+For the model selection, the following Caret's methods were used:
+
+- **LVQ Model:** Learning Vector Quantification 
+- **GBM Model:** Stochastic Gradient Boosting
+- **SVM Model:** Support Vector Machines
+- **RF Model:** Random Forest
+
+Based on the **accuracy** (largest) or **error** (smallest) and **kappa**, the best model that describes the five different fashions is the **RF Model** (pls. see GitHub Repository ./data/modelRF.RData).
+
+With the selected model, the 20 cases on the validation data set were predicted.
+The answers can be found on the **Table: Assignment Answers**
+
+
+### Exploratory Analysis
+```{r Load Training-Testing DataSet, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+system.time({
+
+# Define DataSet File
+file <- "test.dat"
+        
+# Get Temporary Directory
+tmpdir <- tempdir()
+        
+# Unzip the file into the dir
+setwd("~/Data_Analysis/Coursera/Practical_Machine_Learning/Assignment_files/data/")
+
+# Unzip Training - Testing Sets
+unzip("pml-training.zip", exdir = tmpdir)
+unzip("pml-testing.zip", exdir = tmpdir)
+
+# Get / Define path & name of the unzipped
+training_name <- paste(tmpdir, "pml-training.csv", sep = "\\")
+testing_name <- paste(tmpdir, "pml-testing.csv", sep = "\\")
+        
+# Read zipfiles and creates DT (data table)
+plm_training <- read.csv(training_name, header = TRUE, sep =",")
+
+
+plm_training <- read.csv(training_name, header = TRUE, sep =",", 
+                     na.strings = c("", "#DIV/0!","NA"))
+plm_testing <- read.csv(testing_name, header = TRUE, sep =",", 
+                     na.strings = c("", "#DIV/0!","NA"))
+})
+```
+
+```{r Exploratory Analysis 1, dependson = "loadData", echo = FALSE, results = "hide", errors = TRUE}
+sapply(plm_training, levels)
+sapply(plm_training, class)
+
+# Subjects      
+levels(plm_training$user_name)
+sum(table(levels(plm_training$user_name)))
+
+# Dates
+levels(plm_training$cvtd_timestamp)
+sum(table(levels(plm_training$cvtd_timestamp)))
+
+# New Window
+levels(plm_training$new_window)
+sum(table(levels(plm_training$new_window)))
+
+# classe
+levels(plm_training$classe)
+sum(table(levels(plm_training$classe)))
+
+# NA Values
+NAplm_training <- sum(is.na(plm_training))
+NAplm_testing <- sum(is.na(plm_testing))
+```
+
+```{r Exploratory Analysis 2, dependson = "loadData", echo = FALSE, results = "hide", errors = TRUE}
+system.time({
+
+cleaning.data <- function(data){
+        
+# Generating Tidy Data Sets
+colNames <- colnames(data)
+
+# [1]
+# Create vector with the NOT required column
+colNames <- (colNames[(grepl("X",colNames)
+                       | grepl("user_name",colNames)
+                       | grepl("raw_timestamp_part_1",colNames)
+                       | grepl("raw_timestamp_part_2",colNames)
+                       | grepl("cvtd_timestamp",colNames)
+                       | grepl("new_window",colNames)
+                       | grepl("num_window",colNames)
+                       | grepl("total_accel",colNames)
+                       | grepl("kurtosis",colNames)
+                       | grepl("skewness", colNames)
+                       | grepl("max", colNames)
+                       | grepl("min", colNames)
+                       | grepl("amplitude", colNames)
+                       | grepl("var", colNames)
+                       | grepl("avg", colNames)
+                       | grepl("stddev", colNames)
+                       ) == FALSE])
+# [2]
+# Create the Data Table with the required columns
+data <- as.data.table(data)
+data <- data[ , colNames, with = FALSE]
+
+# Create "classe" vector
+classe <- as.vector(data$classe)
+
+# Create Data Frame with classe
+data_classe <- data.frame(classe)
+
+# Delete Column "classe"
+colNames <- colnames(data)
+colNames <- (colNames[(grepl("classe",colNames)) == FALSE])
+data <- data[ , colNames, with = FALSE]
+
+# Merge Data Frames
+data <- cbind(data_classe, data)
+}
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Practical_Machine_Learning/Assignment_files")
+
+# Cleaning Data for "plm_training"" Data Set
+tidy_dataset <- as.data.frame(cleaning.data(plm_training))
+write.table(tidy_dataset, "./data/tidy_dataset.csv", row.names = FALSE , sep = ",")
+
+# Cleaning Data for "plm_testing Data Set
+# "classe" column do not exist for this dataset
+colnames(plm_testing)[160] <- "classe"
+validation_dataset <- cleaning.data(plm_testing)
+
+# Return original Column Name
+colnames(validation_dataset)[1] <- "problem_id"
+
+write.table(validation_dataset, "./data/validation_dataset.csv", row.names = FALSE , sep = ",")
+
+# NA Values
+sum(is.na(tidy_dataset))
+sum(is.na(validation_dataset))
+})      
+```
+
+- On an initial exploratory analysis from the **plm-traning.csv** and **plm-testing.csv** files, there are a large number of "NA" values on both files, and according with:
+
+a. NA Values on plm-training Set: $`r NAplm_training`$
+b. NA Values on plm-testing Set: $`r NAplm_testing`$
+
+- The researchers included on the data sets same columns for statistical data like kurtosis, average, maximal, minimal values, etc, calculated for each time series of sensor measurements.
+
+- Some statistical data are missing, and it's the cause of having "NA" values.
+
+- According with the document **2013.Velloso.QAR-WLE**, the sampling rate is $45$ Hz  ($45$ outputs per sensor per second), meaning one measurement each $0.02$ seconds.
+
+- On the data set included for this assignment, some inaccuracies were found like: 
+
+a. It's possible to find "new_window" with less than 45 readings.
+b. For the "user_name" "carlitos" a "new_window" should start on observation $102$ and $131$.
+
+- Due to these inaccuracies, the final training data set will be treat as independent observations and include only 48 measurements, $12$ per each of the $4$ sensors.
+
+- After the exploratory analysis a tidy data set was generated with the following characteristics:
+
+a. **Tidy Data Set**: $19622$ observations - $49$ variables (pls. see GitHub Repository ./data)
+b. **Variable Description:** pls. see CodeBook.md on GitHub Repository
+
+
+### Training - Testing Data Set
+
+For modelling, a partition ($60/40$%) from the tidy_dataset was done (pls. see GitHub Repository ./data).
+
+- **Training Data Set:** $11776$ observations - $49$ variables ($60$%)
+- **Testing Data Set:** $7846$ observations - $49$ variables ($40$%)
+
+
+
+```{r Create Training-Testing Partition, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+system.time({
+# Create a single 60/40% split on the Training Set
+# The available testing is to short, and it will be used for validation
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Practical_Machine_Learning/Assignment_files")
+
+set.seed(12345)
+inTrain <- createDataPartition(y = tidy_dataset$classe, p = 0.60, list = FALSE)
+
+training <- tidy_dataset[inTrain, ]                	# 60%
+testing <- tidy_dataset[-inTrain, ] 			# 40%
+
+dim(training); dim(testing)
+
+# Writing training and testing data sets
+write.table(training, "./data/training.csv", row.names = FALSE , sep = ",")
+write.table(testing, "./data/testing.csv", row.names = FALSE , sep = ",")
+
+# Cleaning Enviroment
+rm(list=setdiff(ls(), c("training", "testing", "validation_dataset")))
+})
+```
+
+### Model
+
+For the model selection, the following Caret's methods were used, trying to combine regression - classification (dual use), for finding the best possible model:
+
+- **LVQ Model:**        
+a. Learning Vector Quantification 
+b. Use: Classification
+c. Tunning Parameters: size, k
+                        
+- **GBM Model:**        
+a. Stochastic Gradient Boosting
+b. Use: Dual (Regression - Classification)
+c. Tunning Parameters: n.trees, interaction.depth, shrinkage
+
+- **SVM Model:**        
+a. Support Vector Machines
+b. Dual Use (Regression - Classification)
+c. Tunning Parameters: sigma, C
+
+- **RF Model:**         
+a. Random Forest
+b. Dual Use (Regression - Classification)
+c. Tunning Parameters: mtry
+
+Remarks: due to that the outcome variable "classe" is a factor, the model should be "Classification" or "Dual Use".
+
+
+Based on the **accuracy** (largest value) and **kappa** (according with the following list) of each of the models, the best model will be selected.
+
+
+**Kappa:**
+
+- $< 0$: less than chance agreement
+- $0.01-0.20$: slight agreement
+- $0.21- 0.40$: fair agreement
+- $0.41-0.60$: moderate agreement
+- $0.61-0.80$: substantial agreement
+- $0.81-0.99$: almost perfect agreement
+
+
+**Train Control Variables:** (Caret Package)
+
+- Resampling Method: "repeatcv"
+
+- Cross Validation: K-Fold (2 separate 5-fold cross validations)
+
+- Preprocess: center, scale.
+
+```{r Modelling, echo = FALSE, cache = TRUE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+system.time({
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Practical_Machine_Learning/Assignment_files/data")
+
+# Specifiying Resampling Type
+# Resampling Method: repeatedcv - http://topepo.github.io/caret/training.html
+fitControl <- trainControl(## 5-fold CV
+                           method = "repeatedcv",
+                           number = 5,
+                           ## repeated 2 times
+                           repeats = 2,
+                           ## Saving data into a slot called trainingData
+                           returnData = TRUE,
+                           ## Estimate class probabilities
+                           classProbs = TRUE,
+                           ## Allow Parallel Processing
+                           allowParallel = TRUE                          
+                           )
+
+if (!file.exists("modelLvq.RData")){
+        system.time({
+                # LVQ Model - Learning Vector Quantization - Use: Classification
+                # Tunning Parameters: size, k
+                set.seed(12345)
+                modelLvq <- train(classe ~., data = training, method = "lvq", 
+                  preProcess = c("center", "scale"), trControl = fitControl)
+                })
+
+        save(modelLvq, file = "modelLvq.RData", compress = TRUE)
+        
+} else {
+        load(file = "modelLvq.RData")
+}
+
+if (!file.exists("modelGbm.RData")){
+        system.time({
+        # GBM Model - Stochastic Gradient Boosting - Dual Use
+        # Tunning Parameters: n.trees, interaction.depth, shrinkage
+        set.seed(12345)
+        modelGbm <- train(classe ~., data = training, method = "gbm", 
+                  preProcess = c("center", "scale"), trControl = fitControl)
+        })
+        
+        save(modelGbm, file = "modelGbm.RData", compress = TRUE);
+
+} else {
+        load(file = "modelGbm.RData")
+}
+        
+if (!file.exists("modelSmv.RData")){
+        system.time({
+        # SVM Model - Support Vector Machines - Dual Use
+        # Tunning Parameters: sigma, C
+        set.seed(12345)
+        modelSmv <- train(classe ~., data = training, method = "svmRadial", 
+                  preProcess = c("center", "scale"), trControl = fitControl)
+        })
+        
+        save(modelSmv, file = "modelSmv.RData", compress = TRUE)
+
+} else {
+        load(file = "modelSmv.RData")
+}
+
+if (!file.exists("modelRf.RData")){
+        system.time({
+        # RF Model - Random Forest - Dual Use
+        # Tunning Parameters: mtry
+        set.seed(12345)
+        modelRf <- train(classe ~ ., data = training, method = "rf", 
+                 preProcess = c("center", "scale"), trControl = fitControl)
+        })
+        
+        save(modelRf, file = "modelRf.RData", compress = TRUE);
+     
+} else {
+        load(file = "modelRf.RData")
+}
+
+# Collect Resamples
+results <-resamples(list(LVQ = modelLvq, GBM = modelGbm, SVM = modelSmv, 
+                         RF = modelRf))
+})        
+```
+
+
+
+#### Table 1: Model Summary - Accuracy / Kappa per Sample
+```{r Table_1, echo = FALSE, results = "asis", tidy = FALSE, errors = TRUE}
+# Print Model Summary
+xt <- xtable(results$values, caption = "Model Summary", digits = 4)
+print(xt, type = "html", floating = TRUE, caption.placement = "bottom")
+```
+
+
+
+#### Graphic 1: Model Results 
+```{r Graph_1, echo = FALSE, results = "asis", tidy = FALSE, errors = TRUE}
+# Boxplots Results
+g1 <- bwplot(results)
+
+# Dot Plots Results
+g2 <- dotplot(results)
+
+grid.arrange(g1, g2, nrow = 2, ncol = 1)
+```
+
+
+#### Confusion Matrix - Statistics Training - Testing Data Sets
+```{r In Sample - Out Sample Error_1, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+
+# Testing Set
+system.time({
+predictions <- predict(modelRf, newdata = testing)
+
+# Confusion Matrix Testing
+cm <- confusionMatrix(predictions, testing$classe)
+str(cm)
+
+# In Sample Error - Training / Testing Data Sets from selected model
+
+# Values extracted from Training Data Set
+bestmodel <- "Random Forest - Classification"
+maxaccuracy <- max(modelRf$results[, "Accuracy"])
+maxkappa <- max(modelRf$results[, "Kappa"])        
+minmtry <- min(modelRf$results[, "mtry"])
+
+# OOB_Training Calculation:
+OK <- sum(modelRf$finalModel$conf[1, 1], 
+          modelRf$finalModel$conf[2, 2], 
+          modelRf$finalModel$conf[3, 3], 
+          modelRf$finalModel$conf[4, 4], 
+          modelRf$finalModel$conf[5, 5])
+
+NOK <- nrow(training) - OK
+
+OOB_Training <- (NOK/nrow(training)) * 100
+
+# Out Sample Error - Testing Data Set        
+cmoverall <- cm$overall        
+
+# OOB_Testing Calculation:
+OK <- sum(cm$table[1, 1], 
+          cm$table[2, 2], 
+          cm$table[3, 3], 
+          cm$table[4, 4], 
+          cm$table[5, 5])
+
+NOK <- nrow(testing) - OK
+
+OOB_Testing <- (NOK/nrow(testing)) * 100
+
+accuracy <- cmoverall["Accuracy"]
+kappa  <- cmoverall["Kappa"]
+confInterval <- c(cmoverall["AccuracyLower"], cmoverall["AccuracyUpper"])
+pvalue <- format(cmoverall["AccuracyPValue"], scientific=TRUE)
+
+# Error Confusion Matrix Testing Data Set
+confusionMatrixTable <- as.data.table(cm$table)
+
+# Sensitivity - Specificity Testing Data SeT
+classA <- c(cm$byClass[1, 1], cm$byClass[1, 2]) 
+classB <- c(cm$byClass[2, 1], cm$byClass[2, 2]) 
+classC <- c(cm$byClass[3, 1], cm$byClass[3, 2]) 
+classD <- c(cm$byClass[4, 1], cm$byClass[4, 2]) 
+classE <- c(cm$byClass[5, 1], cm$byClass[4, 2]) 
+})
+```
+
+
+```{r In Sample - Out Sample Error_2, echo = FALSE, results = "asis", tidy = FALSE, errors = TRUE}
+# Print Confusion Matrix Training / Testing Data Set
+xt1 <- xtable(modelRf$finalModel$conf, caption = "Training Data Set", 
+        digits = c(0, 0, 0, 0, 0, 0, 4))
+print(xt1, type = "html", floating = TRUE, caption.placement = "bottom")
+
+xt2 <- xtable(cm$table, caption = "Testing Data Set", digits = 0)
+print(xt2, type = "html",  floating = TRUE, caption.placement = "bottom")
+
+# Print Statitics
+# xt3 <- xtable(cm$byClass, caption = "Sensitivity - Testing Data Set")
+# print(xt3, type = "html", floating = TRUE, caption.placement = "bottom")
+```
+
+
+##### Training Data Set:
+- Best Model:                   `r bestmodel` (pls. see ./data/modelRf.RData on GitHub Repository)
+- Maximal Accuracy:             $`r maxaccuracy`$
+- Maximal Kappa:                $`r maxkappa`$
+- mtry:                         $`r minmtry`$
+
+##### Testing Data Set:
+- Accuracy:                     $`r accuracy`$
+- Kappa:                        $`r kappa`$
+- Confidence Interval (95%):    $`r confInterval`$
+- p_value:                      $`r pvalue`$
+
+##### In Sample - Training / Out Sample Error - Testing
+In Random Forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error (OOB), although:
+
+Estimated Error: 
+
+- In Sample - Training Data Set: $`r OOB_Training`$% (less than 1%)
+
+- Out Sample - Testing Data Set: $`r OOB_Testing`$% (less than 1%)
+
+The out sample error is smaller than the in sample error and according with: 
+$`r OOB_Testing`$% $<$ $`r OOB_Training`%$
+
+
+A perfect predictor would be described as 100% sensitive and 100% specificity.
+
+- Sensitivity (True Positive Rate): measures the proportion of actual positives which are correctly identified.
+
+- Specificity (True Negative Rate): measures the proportion of negatives which are correctly identified.
+
+
+For our predictor model (sensitivity / specificity):
+
+- **Classe A:**                   $`r classA`$
+- **Classe B:**                   $`r classB`$
+- **Classe C:**                   $`r classC`$
+- **Classe D:**                   $`r classD`$
+- **Classe E:**                   $`r classE`$
+
+Comparing the accuracy for the training data set (in sample) and the testing data set (out sample), it is almost $`r maxaccuracy`$ / $`r accuracy`$ with a $95$% confidence interval from $`r confInterval`$.
+
+## Validation Data Set:
+```{r Validation_1, echo = FALSE, results = "hide", tidy = FALSE, errors = TRUE}
+# Generating Answer Data Set
+colNames <- colnames(validation_dataset)
+
+# [1]
+# Create vector with the NOT required column
+colNames <- (colNames[(grepl("problem_id",colNames)) == FALSE])
+
+#[2]
+# Create Data Table
+data <- as.data.table(validation_dataset)
+data <- data[ , colNames, with = FALSE]
+
+# Run Model for predicting Values
+answers <- predict(modelRf, data)
+answers <- as.data.frame(answers)
+colnames(answers) <- c("predicted_classe")
+
+# Problem Id
+problemId <- data.frame(problem_id = c(1:20))
+
+# Merge Data Frames with data & results
+answerdata <- cbind(problemId, answers, data)
+
+# Set Working Directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Practical_Machine_Learning/Assignment_files")
+
+answerdata <- as.data.frame(answerdata)
+write.table(answerdata, "./reports/answers.csv", row.names = FALSE , sep = ",")
+```
+
+```{r r Validation_2, echo = FALSE, results = "asis", tidy = FALSE, errors = TRUE}
+xt4 <- xtable(answerdata[, 1:11], caption = "Assignment Answers", ,digits = 2)
+print(xt4, type = "html", floating = FALSE, caption.placement = "bottom")
+```
+
+```{r Answer Submision, echo = FALSE, results = "hide", tidy = FALSE, errors = TRUE}
+# Generating Answers for Submission
+# Set Working Directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Practical_Machine_Learning/Assignment_files/reports/")
+
+data <- answers
+
+# Execute Function
+loopLength <- nrow(data)
+  for(i in 1:loopLength){
+          x <- data[i, 1]
+          answers <- rep(x, i)
+          filename = paste0("problem_id_",i,".txt")
+          write.table(x, file = filename, quote = FALSE, row.names = FALSE,
+                col.names = FALSE)
+          }
+```
+
+
+
+### Session Information
+```{r Session Information, echo = FALSE}
+sessionInfo()
+```
+
+```{r Delete Temporary Directories, echo = FALSE}
+# Delete the '#' sign before unlink() to delete temp files
+unlink("tmpDir", recursive = TRUE)
+```
+
+```{r Clean Up Workspace_2, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+rm(list = ls())
+gc()
+```

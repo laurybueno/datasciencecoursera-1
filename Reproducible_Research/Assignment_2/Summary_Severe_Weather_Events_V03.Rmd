@@ -1,0 +1,414 @@
+---
+title: "Summary Severe Weather Events in the United States"
+output: html_document
+---
+Version: V00
+
+Date: 24-nov-2014
+
+GitHub Repository: https://github.com/A6111E/datasciencecoursera/tree/master/Reproducible_Research/Assignment_2
+
+Data Source: NATIONAL OCEANIC AND ATMOSPHERIC ADMINISTRATION (NOAA)
+
+http://www.ncdc.noaa.gov/stormevents/
+
+#### Synopsis:
+
+- This study is based on the Storm Data from the National Oceanic and Atmospheric Administration (NOAA) in the United States. 
+
+- Record Dates (%Y/%m/%d) between:      1950/01/03 - 2011/11/30
+
+- Documents the occurrence of storms and other significant weather phenomena, with the sufficient intensity to cause loss of life, injuries, significant property damage, and/or disruption to commerce. 
+
+Analysis Summary:
+
+(1) Most Harmfull Events for the Population Heath:
+- Event Type:           Tornado
+- Fatalities:           5633
+- Injuries:             91346
+- Total Victims:        96979
+
+(2) Economic Damages to Properties / Crop:
+- Event Type:           Flood
+- Fatalities:           470
+- Injuries:             6789
+- Property Damages:     144657.71 KUSD  
+- Crop Damages:         5661.97 KUSD
+- Total Damages:        150.32 BUSD
+
+For more information, please refer to the reports folder on GitHub:
+- Most_HarmFull_Events.txt
+- Economic_Damages.txt
+
+### Data Processing:
+```{r Call required libraries, echo = TRUE, results = "hide", warning = FALSE, message = FALSE}
+library(data.table)             # Data Table
+library(plyr)                   #
+library(ggplot2)                # Plotting
+library(timeDate)               # Converting Times / Dates
+library(xtable)                 # For generating tables knitr
+library(knitr)                  # Markdown
+library(R.utils)                # Unzip bz2 Files
+library(gridExtra)              # Grid for graphics
+```
+
+### knitr Setup:
+```{r knitr Setup, include = FALSE, echo = TRUE, results = "hide", warning = FALSE, message = FALSE}
+
+opts_chunk$set(
+        fig.path = "graphs/plot_",                                         
+        fig.height = 5, fig.width = 5, 
+        options(scipen = 1, digits = 2),
+        cache.path = "cache/",
+        cache = TRUE
+)
+```
+
+```{r Clean Up Workspace, echo = TRUE, results = "hide", warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+
+```{r Creates Working Directories, echo = TRUE, results = "hide", warning = FALSE, message = FALSE}
+dir.create("data")              # Source Data
+dir.create("docs")              # Document files
+dir.create("reports")           # Report files
+
+# Other Directories: created by code (graphs / cache)
+```
+
+### Download - Read DataSet
+```{r Download - Read Dataset, results = "asis", echo = TRUE}
+tmpDir <- tempdir()             # Create Temporary Directory
+tmpFile1 <- tempfile()          # Create Temporary File for zip File
+tmpFile2 <- tempfile()          # Create Temporary File for csv File
+
+# Define URL and download file
+system.time({
+fileUrl <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+download.file(fileUrl, destfile = tmpFile1)
+})
+
+system.time({
+# Creates csv File for reading
+bunzip2(filename = tmpFile1, destname = tmpFile2, remove = FALSE, overwrite = TRUE)
+})
+
+system.time({
+# Create Raw DataTable
+DT <- tempfile()
+DT <- read.csv(tmpFile2, as.is = TRUE, na.strings = "", header = TRUE)
+})
+``` 
+
+```{r Obtain Column Classes - Changing Classes Raw Data, echo = TRUE, results = "hide"}
+classes <- (sapply(DT, class))
+classes
+```
+
+### DataSet:
+Please refer to the following documents file on the "docs" folder on the GitHub Repository for more information:
+
+- "repdata_peer2_doc_NCDC Storm Events-FAQ Page.pdf"
+- "repdata_peer2_doc_pd01016005curr.pdf"
+
+1. EVTYPE: types of events like storms or other significant weather phenomena (48 types of events) ("repdata_peer2_doc_pd01016005curr.pdf" - Chapter 7 - Page 18)
+
+   NOAA: http://www.ncdc.noaa.gov/stormevents/details.jsp?type=eventtype
+
+2. FATALITIES: fatalities directly caused by weather events 
+
+3. INJURIES: injuries directly caused by weather events
+
+4. PROPDMG:estimated damages to properties. Refers to damage inflicted to private property (structures, objects, vegetation), as well as public infrastructure and facilities. 
+
+5. CROPDMG: estimated damages to crop, obtained from reliable sources, such as the U.S. Department of Agriculture (USDA).
+
+6. PROPDMGEXP / CROPDMGEXP: estimates rounded to three significant digits, followed by an alphabetical character signifying the magnitude of the number:
+
+a. "Hh" for hundreds
+b. "Kk" for thousands
+c. "Mm" for millions
+d. "Bb" for billions
+
+#### Event Types
+
+- According with the NOAA documentation, there are 48 event types (EVTYPE)
+- The raw Storm Database, has 985 different event types (possible cause: typing errors) 
+- On the "docs" folder on GitHub, it's possible to find the file "EVTYPE.txt"
+- This file was used for debbuging the raw data.
+- Initial Observations = 902297
+- Final Observations after debbuging = 629694
+- Aproximately 30% of the initial observations were avoid. 
+- Without this debugging procedure, the analysis would have mistakes.
+
+```{r Event Type Dataset, results = "asis", echo = TRUE}
+# Reading txt file with the 48 event types (EVTYPE)
+EVTYPE <- read.table("./docs/EVTYPE.txt", sep = ",", header = FALSE, strip.white =TRUE)
+
+# Convert to a Vector
+EVTYPE_vector <- EVTYPE[ ,"V1"]
+```
+
+#### Tidy DataSet
+```{r Tidy Dataset, results = "hide", echo = TRUE}
+system.time({
+DT1 <- DT[DT$EVTYPE %in% EVTYPE_vector, ]
+
+# For checking
+list <- unique(DT1[, "EVTYPE"])
+# list
+
+DT <- DT1       # Tidy DataSet
+
+classes <- (sapply(DT, class))
+classes               # Delete the # to execute
+
+# Convert Dates -Symbol Meaning:
+# %d: day as a number (0-31)  01-31 
+# %a: abbreviated weekday (Mon) - %A: unabbreviated weekday (Monday)
+# %m:  month (00-12)  00-12 
+# %b: abbreviated month (Jan) - %B abbreviated month (January)
+# %y: 2-digit year (07) - %Y: 4-digit year (2007)
+
+DT$BGN_DATE <- as.Date(DT$BGN_DATE, "%m/%d/%Y")
+})
+
+# Research Dates
+# Max - Min Date Values
+minValue <- DT[which.min(DT$BGN_DATE), ]
+maxValue <- DT[which.max(DT$BGN_DATE), ]
+
+rm(DT1)         # remove from environment
+```
+
+#### Table: NOAA Storm DataBase Summary
+```{r Summary Raw Data, echo = TRUE, results = "asis", tidy = FALSE}
+xt <- xtable(DT[1:10, c(6:8, 23:27, 32:33)], digits = 0)
+print(xt, type = "html", include.rownames = FALSE, hline.after=c(1), floating = FALSE)
+```
+
+### Results Analysis:
+
+#### [1] Types of Events (EVTYPE) - Most Harmful with respect to the Population Health
+```{r Most Harmful Events1, echo = TRUE, results = "hide"}
+system.time({ 
+# Create vector for the required column names (EVTYPE - FATALITIES- INJURIES)
+colNames <- c("EVTYPE", "FATALITIES", "INJURIES")
+
+# Create the Data Table with the required columns
+DT1 <- DT[ , colNames]
+
+fatalitiesSum <- ddply(DT1, .(EVTYPE), summarise, Fatalities = sum(FATALITIES))
+injuriesSum <- ddply(DT1, .(EVTYPE), summarise, Injuries = sum(INJURIES))
+
+victims  <- data.table(merge(fatalitiesSum,injuriesSum))
+
+victims <- victims[ , Total_Victims := Fatalities + Injuries]
+
+victims <- arrange(victims,desc(Total_Victims))
+
+setnames(victims, c("Event_Type", "Fatalities","Injuries","Total_Victims"))
+
+write.table(victims, "./reports/Most_Harmfull_Events.txt", row.names = FALSE , 
+            sep = ",")
+})
+```
+
+#### Table: Most Harmfull Events for the Population Health Summary
+```{r Most Harmfull Events2, echo = TRUE, results = "asis", tidy = FALSE}
+xt <- xtable(victims[1:10, ], digits = 0)
+print(xt, type = "html", include.rownames = FALSE, hline.after=c(1), floating = FALSE)
+```
+
+#### Graphic: 10 Most Harmfull Events for the Population Health in the United States of America Years: 1950 - 2011
+```{r Barplot Most Harmfull Events3, echo = TRUE}
+
+# First plot
+ggplot(head(victims, 10), aes(x = Event_Type, y = Total_Victims)) + geom_bar(stat = "identity", fill = "red", width = 0.5) + labs(x = "Event Typ", y = "Total Victims") + coord_flip()
+
+# Second plot  
+p2 <- ggplot(head(victims, 10), aes(x = Event_Type, y = Fatalities)) + geom_bar(stat = "identity", fill = "yellow", width = 0.25) + labs(x = "Event Typ", y = "Fatalities") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# Third plot 
+p3 <- ggplot(head(victims, 10), aes(x = Event_Type, y = Injuries)) + geom_bar(stat = "identity", fill = "blue", width = 0.25) + labs(x = "Event Typ", y = "Injuries") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+grid.arrange(p2, p3, ncol = 2)
+```
+
+```{r Most Harmfull Events4, echo = TRUE, tidy = FALSE}
+event_type <- victims[1, Event_Type]
+fatalities <- (max(victims$Fatalities))
+injuries <- (max(victims$Injuries))
+total <- (max(victims$Total_Victims))
+```
+     
+Across the United States, the top most harmful weather events with respect to population health are:
+
+- Event Type:           `r event_type`
+- Total Fatalities:     `r fatalities`
+- Total Injuries:       `r injuries`
+- Total Victims:        `r total`
+
+#### [2] Events - Economic Damages
+```{r Events - EDamages1, echo = TRUE, results = "hide"}
+# Create vector for the required column names (EVTYPE - FATALITIES- INJURIES)
+colNames <- c("EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", 
+              "CROPDMGEXP")
+
+# Create the Data Table with the required columns
+DT1 <- data.table(DT[ , colNames])
+```
+
+```{r Column Classes DT1 - Changing Classes Raw Data, echo = TRUE}
+classes <- (sapply(DT1, class))
+# classes               # Delete the # to execute
+
+list <- unique(DT1[, PROPDMGEXP])
+# list                # Delete the # to execute
+
+list <- unique(DT1[, CROPDMGEXP])
+# list                # Delete the # to execute
+```
+
+Remarks: 
+
+- The damage amounts are received from a variety of sources. 
+- Property and Crop damage should be considered as a broad estimate. 
+- Alphabetical characters used are "Hh" for hundreds, Kk" for thousands, "Mm" for millions, and "Bb" for billions.
+- Other characters are not included on this analysis.
+
+```{r Events - EDamages2, echo = TRUE, results = "hide"}
+system.time({
+# PROPDMG - CROPDMG: changing exponencial letter by values & debugging dataset
+DT1$PROPDMGEXP <- gsub("^[Hh]$","100", DT1$PROPDMGEXP)
+DT1$PROPDMGEXP <- gsub("^[Kk]$","1000", DT1$PROPDMGEXP)
+DT1$PROPDMGEXP <- gsub("^[Mm]$","1000000", DT1$PROPDMGEXP)
+DT1$PROPDMGEXP <- gsub("^[Bb]$","1000000000", DT1$PROPDMGEXP)
+
+DT1$PROPDMGEXP <- gsub("^[+ | 0 | 5 | 2 | 4 | 7 | ? | - | 6 | 3 | 1 | 8]$","1", 
+                       DT1$PROPDMGEXP)
+
+DT1$PROPDMGEXP <- gsub("^[-]$","1", DT1$PROPDMGEXP)
+
+DT1$CROPDMGEXP <- gsub("^[Hh]$","100", DT1$CROPDMGEXP)
+DT1$CROPDMGEXP <- gsub("^[Kk]$","1000", DT1$CROPDMGEXP)
+DT1$CROPDMGEXP <- gsub("^[Mm]$","1000000", DT1$CROPDMGEXP)
+DT1$CROPDMGEXP <- gsub("^[Bb]$","1000000000", DT1$CROPDMGEXP)
+
+DT1$CROPDMGEXP <- gsub("^[0]$","1", DT1$CROPDMGEXP)
+
+DT1[is.na(DT1)]<-1
+})
+
+# Check
+list <- unique(DT1[, PROPDMGEXP])
+# list                # Delete the # to execute
+
+list <- unique(DT1[, CROPDMGEXP])
+# list                # Delete the # to execute
+```
+
+```{r Events - EDamages3, echo = TRUE, results = "hide"}
+# Calculate Total Damages
+# To Properties
+DT1$Total_Prop_Damages_MUSD <- (as.numeric(DT1$PROPDMGEXP) * DT1$PROPDMG) / 1e6
+
+# To Crop
+DT1$Total_Crop_Damages_MUSD <- (as.numeric(DT1$CROPDMGEXP) * DT1$CROPDMG) / 1e6
+
+# Total Damages
+DT1$Total_Damages_BUSD <- (DT1$Total_Prop_Damages + DT1$Total_Crop_Damages) / 1e3
+```
+
+```{r Events - EDamages4, echo = TRUE, results = "hide"}
+# Final DataSet
+colNames <- c("EVTYPE", "FATALITIES", "INJURIES", "Total_Prop_Damages_MUSD", 
+              "Total_Crop_Damages_MUSD", "Total_Damages_BUSD")
+DT2 <- DT1[ , colNames, with = FALSE]
+```
+
+```{r Events - EDamages5, echo = TRUE, results = "hide"}
+economic_damages <- ddply(DT2, .(EVTYPE), numcolwise(sum))
+
+# Cross Check
+list <- unique(economic_damages[ ,"EVTYPE"])
+# list                # Delete the # to execute
+
+list <- unique(economic_damages[ ,"Total_Damages_BUSD"])
+# list                # Delete the # to execute
+
+economic_damages <- arrange(economic_damages,desc(Total_Damages_BUSD))
+
+write.table(economic_damages, "./reports/Economic_Damages.txt", row.names = FALSE , 
+            sep = ",")
+```
+
+#### Table: Total Economic Damages 
+```{r Events - EDamages6, echo = TRUE, results = "asis", tidy = FALSE}
+xt <- xtable(economic_damages[1:10, ], digits = 2)
+print(xt, type = "html", include.rownames = FALSE, hline.after=c(1), floating = FALSE)
+```
+
+```{r Events - EDamages7, echo = TRUE, tidy = FALSE}
+event_type <- economic_damages[1, "EVTYPE"]
+total <- (max(economic_damages$Total_Damages_BUSD))
+```
+     
+Across the United States, the top most harmful weather events with respect to the economci consequeneces are:
+
+- Event Type:           `r event_type` 
+- Total Damages:        `r total` BUSD     
+
+#### Graphic: Total Economic Damages
+```{r Barplot Economic Damages, echo = TRUE}
+g1 <- ggplot(head(economic_damages, 10), aes(x = EVTYPE, y = Total_Damages_BUSD)) + geom_bar(stat = "identity", fill = "blue", width = 0.5) + labs(title = "10 Most Economic Damages Events \n United States of America \n 1950 - 2011") + labs(x = "Event Type", y = "Total Damages BUSD") + coord_flip() + theme(plot.title = element_text(lineheight=.8, face="bold"))
+g1
+```
+
+```{r Cross Checking Results using other R Commands, echo = TRUE}
+# Fatalities - Injuries
+colNames <- c("EVTYPE", "FATALITIES", "INJURIES")
+DT1 <- DT[ , colNames]
+x_Check <- aggregate(cbind(FATALITIES, INJURIES) ~ EVTYPE, data = DT1, sum)
+
+x_Check <- arrange(x_Check,desc(FATALITIES))
+#       EVTYPE          FATALITIES      INJURIES
+# 1     TORNADO         5633    	91346
+# 2	EXCESSIVE HEAT  1903    	6525
+# 3	FLASH FLOOD	978	        1777
+# 4	HEAT	        937	        2100
+# 5	LIGHTNING	816	        5230
+# 6     FLOOD   	470     	6789
+# 7	RIP CURRENT	368     	232
+# 8	HIGH WIND	248     	1137
+# 9	AVALANCHE	224     	170
+# 10	WINTER STORM	206     	1321
+
+x_Check <- arrange(x_Check,desc(INJURIES))
+#       EVTYPE          FATALITIES      INJURIES
+# 1     TORNADO        5633	        91346
+# 2	FLOOD	        470	        6789
+# 3	EXCESSIVE HEAT	1903    	6525
+# 4	LIGHTNING	816     	5230
+# 5	HEAT	        937     	2100
+# 6	ICE STORM	89	        1975
+# 7	FLASH FLOOD	978     	1777
+# 8	THUNDERSTORM WIND       133	1488
+# 9	HAIL	        15	        1361
+# 10	WINTER STORM	206	        1321
+
+# Comparation againts "Most_Harmful_Events.txt" <- OK
+
+event_type <- economic_damages[1, "EVTYPE"]
+total <- (max(economic_damages$Total_Damages_MUSD))
+```
+
+### Session Information
+```{r Session Information, echo = TRUE}
+sessionInfo()
+```
+
+```{r Delete Temporary Directories, echo = TRUE}
+# Delete the '#' sign before unlink() to delete temp files
+unlink("tmpDir", recursive = TRUE)
+```

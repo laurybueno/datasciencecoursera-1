@@ -1,0 +1,4 @@
+"Data","t_Quantile","Degrees_Freedom_df","Mean Difference","p_value","Confidence_ Interval_-","Confidence_Interval_+","Equal_Variances"
+"groupOJ and groupVC","2.9791","9","5.25","0.01547","1.26346","9.23654","FALSE"
+"groupOJ and groupVC","3.37212","9","5.93","0.00823","1.95191","9.90809","FALSE"
+"groupOJ and groupVC","-0.04259","9","-0.08","0.96696","-4.32898","4.16898","FALSE"

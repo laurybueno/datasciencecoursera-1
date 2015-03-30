@@ -1,0 +1,364 @@
+---
+title: "THE EFFECT OF VITAMIN C ON TOOTH GROWTH IN GUINEA PIGS"
+output: html_document
+---
+Version: V00
+
+Date: 21-dec-2014
+
+GitHub Repository: https://github.com/A6111E/datasciencecoursera/tree/master/Statistical_Inference/Assignment_Part2
+
+Data Source: R Datasets Package (http://svitsrv25.epfl.ch/R-doc/library/datasets/html/00Index.html)
+
+#### Synopsis:
+During the 2nd World War, the Canadian Government was concern, because the difficulty of providing natural sources of $Vitamin C$ to the armed forces. In as much as chemical procedures gave different results, as to the potency of food in which the armed forces were interested, the Department of Nutrition of the McGill University in Quebec, was requested in 1942 to establish a Vitamin C bio-assay, which might be used as a check against chemical procedures (http://jn.nutrition.org/content/33/5/491.full.pdf)
+
+**DataSet Description:** data with the response the tooth growth the length of odontoblasts (teeth) in each of $10$ guinea pigs at each of $3$ dose levels of Vitamin C ($0.5$, $1$, and $2$ mg), with each of two delivery methods ($OJ:orange juice$ or $VC: ascorbic acid$). 
+
+**- Data Frame:** $60$ observations - $3$ variables
+
+**- Variable [len]:** numeric - tooth length
+
+**- Variable [supp]:** factor - supplement type (VC or OJ)
+
+**- Variable [dose]:** numeric - dose in milligrams (mg) 
+
+### Exploratory Analysis:
+```{r Call required libraries, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+require(data.table)             # Data Table
+require(ggplot2)                # Plotting
+require(xtable)                 # For generating tables knitr
+require(knitr)                  # Markdown
+require(gridExtra)              # Grid for graphics
+require(datasets)               # Load dataset
+require(plyr)
+```
+
+```{r knitr Setup, include = FALSE, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+
+opts_chunk$set(
+        fig.path = "graphs/plot_",                                         
+        fig.height = 5, fig.width = 10, 
+        options(scipen = 1, digits = 2),
+        cache.path = "cache/",
+        cache = FALSE
+        )
+```
+
+```{r Clean Up Workspace, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+rm(list = ls())
+gc()
+```
+
+```{r Creates Working Directories, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+dir.create("data")              # Source Data
+dir.create("docs")              # Document files
+dir.create("reports")           # Report files
+
+# Other Directories: created by code (graphs / cache)
+```
+
+```{r Load DataSet, results = "hide", echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+system.time({
+ToothGrowth <- as.data.table(ToothGrowth)        # Source: DataSet R Package
+
+write.table(ToothGrowth, "./reports/ToolGrowth.txt", row.names = FALSE , 
+            sep = ",")
+
+# Summary per Supplement Orange Juice (OJ) * Vitamin C (VC)
+# OC
+OJ <- ToothGrowth[ToothGrowth$supp == "OJ", ]
+OJ_dos0.5 <- as.vector(as.matrix(subset(OJ, (dose == "0.5"))))     # Dose 0.5mg
+OJ_dos1.0 <- as.vector(as.matrix(subset(OJ, (dose == "1"))))       # Dose 1.0mg
+OJ_dos2.0 <- as.vector(as.matrix(subset(OJ, (dose == "2"))))       # Dose 2.0mg
+
+OJ_data <- matrix(data = NA, nrow = 10, ncol = 0)
+
+OJ_data <- cbind(OJ_data, OJ_dos0.5)
+OJ_data <- cbind(OJ_data, OJ_dos1.0)
+OJ_data <- cbind(OJ_data, OJ_dos2.0)
+
+OJ_data <- as.data.frame(OJ_data)
+
+write.table(OJ_data, "./reports/ToothGrowth_Supplement_Orange_Juice.txt", row.names = FALSE , sep = ",")
+
+# VC
+VC <- ToothGrowth[ToothGrowth$supp == "VC", ]
+VC_dos0.5 <- as.vector(as.matrix(subset(VC, (dose == "0.5"))))     # Dose 0.5mg
+VC_dos1.0 <- as.vector(as.matrix(subset(VC, (dose == "1"))))       # Dose 1.0mg
+VC_dos2.0 <- as.vector(as.matrix(subset(VC, (dose == "2"))))       # Dose 2.0mg
+
+VC_data <- matrix(data = NA, nrow = 10, ncol = 0)
+
+VC_data <- cbind(VC_data, VC_dos0.5)
+VC_data <- cbind(VC_data, VC_dos1.0)
+VC_data <- cbind(VC_data, VC_dos2.0)
+
+VC_data <- as.data.frame(VC_data)
+
+write.table(VC_data, "./reports/ToothGrowth_Supplement_Vitamin_C.txt", row.names = FALSE , sep = ",")
+})
+```
+
+#### Table: Data Summary - Guinea Pig Tooth Growth per Supplement / Dose 
+```{r Summary Guinea Pig Tooth Growth per Supplement_1 / Dose, echo = FALSE, results = "asis", tidy = FALSE}
+
+xt <- xtable(ddply(ToothGrowth,.(Supplement = supp, Dose = dose), summarize, Average = mean(len), Std_Deviation = sd(len), Variance = var(len), Median = median(len), Max = max(len),  Min = min(len)))
+print(xt, type = "html", floating = FALSE)
+```
+
+Remarks:
+
+- Supplement: OJ (Orange Juice) - VC (Vitamin C - ascorbic acid)
+
+- Average / Std_Deviation / Variance: statistic data for the tooth growth length 
+
+- GitHub Repository: /reports
+
+#### Table: Data Summary - Supplement Orange Juice 
+```{r Summary Guinea Pig Tooth Growth per Supplement_2 / Dose, echo = FALSE, results = "asis", tidy = FALSE}
+OJ_data <- xtable(OJ_data, caption = 1)
+print(OJ_data, type = "html", floating = FALSE)
+```
+
+#### Table: Data Summary - Supplement Vitamin C
+```{r Summary Guinea Pig Tooth Growth per Supplement_3 / Dose, echo = FALSE, results = "asis", tidy = FALSE}
+VC_data <- xtable(VC_data, caption = 1)
+print(VC_data, type = "html", floating = FALSE)
+```
+
+#### Graphic: Guinea Pig Tooth Growth Length ~ Supplement ~ Dose 
+```{r Exploratory Data_1, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+# Box Plot: Supplement Orange Juice (OJ)
+OJ <- ToothGrowth[ToothGrowth$supp == "OJ", ]
+
+p1 <- ggplot(OJ, aes(x = factor(dose), y = len, fill = factor(dose)))
+p1 <- p1 + geom_boxplot() + scale_x_discrete("Dose (mg)") + scale_y_continuous("Tooth Length") + ggtitle("Supplement Orange Juice")
+
+# Box Plot: Supplement Ascorbic Acid (VC)
+VC <- ToothGrowth[ToothGrowth$supp == "VC",]
+
+p2 <- ggplot(VC, aes(x = factor(dose), y = len, fill = factor(dose))) 
+p2 <- p2 + geom_boxplot() + scale_x_discrete("Dose (mg)") + scale_y_continuous("Tooth Length") + ggtitle("Supplement: Vitamin C")
+
+grid.arrange(p1, p2, nrow = 1, ncol = 2, main = "Guinea Pig Tooth Growth Length")
+
+# Plot
+p3 <- ggplot(ToothGrowth, aes(x = dose, y = len))
+p3 <- p3 + geom_point(aes(color = dose), size = 3, alpha = 1/2) + facet_grid(. ~ supp) + geom_smooth(method = "lm", se = TRUE) + labs(title = "Guinea Pig Tooth Growth Length ~ Supplement ~ Dose") + labs(x = "Dose (mg)", y = "Tooth Length") + theme_bw(base_family = "Avenir", base_size = 10)
+
+grid.arrange(p3)
+```
+
+Remarks:
+
+- OJ: supplement Orange Juice
+
+- VC: supplement Vitamin C
+
+### Basic Summary
+The summary table "Data Summary - Guinea Pig Tooth Growth per Supplement / Dose" included above, shows statistical data like the mean, standard deviation, variance, median, maximal and minimal values, for each type of supplement and dose.
+
+- For both supplement groups, Orange Juice and Vitamin C, as the doses increases, the tooth growth increases.
+- For doses of $0.5$ and $1.0 mg$, the maximal value of tooth growth corresponds to the supplement **Orange Juice**.
+- For doses of $2.0 mg$, the maximal value of tooth growth corresponds to the supplement  **Vitamin C**.
+- For doses of $0.5$ and $1.0 mg$, the mean of tooth growth for Orange Juice is higher than for **Vitamin C**.
+- For doses of $2.0 mg$, there is no difference in the mean of tooth growth for both **supplements**.
+
+**Initial Conclusions:**
+
+- **Orange Juice** could have more impact on tooth growth for $0.5$ and $1.0 mg$ doses, with maximal values of $21.50$ and $27.30$, although the variance is widely spread, standard deviation is higher than for Vitamin C.
+
+- **Vitamin C** could have more impact on tooth growth for $2.0 mg$ doses, with maximal values of $33.90$, although the variance is widely spread. 
+
+- There is **not evidence** of a dependence of tooth growth with the supplement, Orange Juice or Vitamin C.
+
+- In both cases, there is **clear evidence** of a dependence of tooth growth on dose.
+
+### Analysis - Gosset's t Test:
+
+**Hypothesis**:
+
+- Null hypothesis ($H_0$): is that the mean tooth growth for $Orange Juice$ (OJ) is equal to the mean tooth growth for $Vitamin C$ (VC), for the same dose. 
+
+- Alternative Hypothesis ($H_a$): not equal.
+
+$$H_0: \mu_{VC} = \mu_{OJ}$$
+$$H_a: \mu_{VC} \ne \mu_{OJ}$$
+
+**Assumptions**:
+
+- The test was done on $10$ pigs chosen randomly, for each supplement ($Orange Juice - Vitamin C$) and each dose ($0.5, 1, 2 mg$).
+
+- Independent Groups: (not paired).
+
+- Unequal variance.
+
+For the **Gosset's t Test**, the dataset have the following groups:
+
+- Group 1: Dose: $0.5mg$ ~ both Supplements
+
+- Group 2: Dose: $1.0mg$ ~ both Supplements
+
+- Group 3: Dose: $2.0mg$ ~ both Supplements
+
+**Total t test Groups:** $3$
+
+#### Confidence Interval Analysis 
+```{r Analysis_1, echo = TRUE, results = "hide", warning = FALSE, message = FALSE}
+# t Test Outputs
+# t: $statistic / df: $parameter / p: $p.value / Confidence Interval: $conf
+# Mean of Differences: $estimate
+# Alternative: $alternative / Method:  $method / Data Name: $data.name
+
+sta_data <- matrix(data = NA, nrow = 0, ncol = 8)
+
+# Group 1 - Per Dose: 0.5 mg ~ both Supplements
+group05_OJ_VC <- ToothGrowth[ToothGrowth$dose == "0.5",]
+
+groupOJ <- group05_OJ_VC[group05_OJ_VC$supp == "OJ"]
+groupOJ[ , c("supp", "dose") := NULL]
+groupOJ <- groupOJ$len
+
+groupVC <- group05_OJ_VC[group05_OJ_VC$supp == "VC"]
+groupVC[ , c("supp", "dose") := NULL]
+groupVC <- groupVC$len
+
+diff <- groupOJ - groupVC
+
+# t Confidence
+# Calculation - Option 1 
+mn <- mean(diff)
+s <- sd(diff)
+n <- length(groupOJ)
+
+t.test1 <- mn + c(-1, 1) * qt(.95, n-1) * s / sqrt(n)
+
+t.true <- t.test(groupOJ, groupVC, paired = TRUE, var.equal = TRUE, conf.level = 0.95)
+
+t.false <- t.test(groupOJ, groupVC, paired = TRUE, var.equal = FALSE, conf.level = 0.95)
+
+sta_data <- rbind(c(t.true$data.name, round(t.true$statistic, 5), 
+                   round(t.true$parameter, 5), round(t.true$estimate, 5), 
+                   round(t.true$p.value, 5) , round(t.true$conf, 5), "TRUE"))
+
+sta_data <- rbind(sta_data, c(t.true$data.name, round(t.true$statistic, 5), 
+                   round(t.true$parameter, 5), round(t.true$estimate, 5), 
+                   round(t.true$p.value, 5) , round(t.true$conf, 5), "FALSE"))
+```
+
+```{r Analysis_2, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+# Group 2 - Per Dose: 1.0 mg ~ both Supplements
+group1_OJ_VC <- ToothGrowth[ToothGrowth$dose == "1",]
+
+groupOJ <- group1_OJ_VC[group1_OJ_VC$supp == "OJ"]
+groupOJ[ , c("supp", "dose") := NULL]
+groupOJ <- groupOJ$len
+
+groupVC <- group1_OJ_VC[group1_OJ_VC$supp == "VC"]
+groupVC[ , c("supp", "dose") := NULL]
+groupVC <- groupVC$len
+
+t.true <- t.test(groupOJ, groupVC, paired = TRUE, var.equal = TRUE, conf.level = 0.95)
+
+t.false <- t.test(groupOJ, groupVC, paired = TRUE, var.equal = FALSE, conf.level = 0.95)
+
+sta_data <- rbind(sta_data, c(t.true$data.name, round(t.true$statistic, 5), 
+                   round(t.true$parameter, 5), round(t.true$estimate, 5), 
+                   round(t.true$p.value, 5) , round(t.true$conf, 5), "TRUE"))
+
+sta_data <- rbind(sta_data, c(t.true$data.name, round(t.true$statistic, 5), 
+                   round(t.true$parameter, 5), round(t.true$estimate, 5), 
+                   round(t.true$p.value, 5) , round(t.true$conf, 5), "FALSE"))
+
+# Group 3 - Per Dose: 2.0 mg ~ both Supplements
+group2_OJ_VC <- ToothGrowth[ToothGrowth$dose == "2",]
+
+groupOJ <- group2_OJ_VC[group2_OJ_VC$supp == "OJ"]
+groupOJ[ , c("supp", "dose") := NULL]
+groupOJ <- groupOJ$len
+
+groupVC <- group2_OJ_VC[group2_OJ_VC$supp == "VC"]
+groupVC[ , c("supp", "dose") := NULL]
+groupVC <- groupVC$len
+
+t.true <- t.test(groupOJ, groupVC, paired = TRUE, var.equal = TRUE, conf.level = 0.95)
+
+t.false <- t.test(groupOJ, groupVC, paired = TRUE, var.equal = FALSE, conf.level = 0.95)
+
+sta_data <- rbind(sta_data, c(t.true$data.name, round(t.true$statistic, 5), 
+                   round(t.true$parameter, 5), round(t.true$estimate, 5), 
+                   round(t.true$p.value, 5) , round(t.true$conf, 5), "TRUE"))
+
+sta_data <- rbind(sta_data, c(t.true$data.name, round(t.true$statistic, 5), 
+                   round(t.true$parameter, 5), round(t.true$estimate, 5), 
+                   round(t.true$p.value, 5) , round(t.true$conf, 5), "FALSE"))
+```
+
+#### Table: Statistical Data Summary - Gosset's t Test 
+```{r r Analysis_3, echo = FALSE, results = "asis", tidy = FALSE}
+sta_data <- as.data.table(sta_data)
+
+colNames <- c("Data", "t_Quantile", "Degrees_Freedom_df", "Mean Difference", "p_value", "Confidence_ Interval_-", "Confidence_Interval_+", "Equal_Variances")
+setnames(sta_data,colNames)
+
+# Selecting Rows for Equal_Variance = FALSE
+setkey(sta_data,Equal_Variances) 
+
+tidy_sta_data <- sta_data["FALSE"]
+tidy_sta_data <- xtable(tidy_sta_data)
+print(tidy_sta_data, type = "html", floating = FALSE)
+
+write.table(sta_data, "./reports/Statistical_Data_Gosset_t_Test_Var_False&True.txt", row.names = FALSE , sep = ",")
+write.table(tidy_sta_data, "./reports/Statistical_Data_Gosset_t_Test_Var_False.txt", row.names = FALSE , sep = ",")
+```
+
+Remarks: 
+- t-test Statistical Summaries on GitHub Repository: /reports
+
+### Conclusions:
+
+**(1) Orange Juice and Vitamin C effectiveness - Dose 0.5 mg:**
+- Confidence Interval:          $95%$
+
+- Mean Difference:              $5.25$
+
+- p-value: $0.01547$ **<** $0.05$
+
+- Null hypothesis: *would be rejected* (mean difference is not $0$)
+
+- The supplement *Orange Juice is more effective for this dose*.
+
+**(2) Orange Juice and Vitamin C effectiveness - Dose 1 mg:**
+- Confidence Interval:          $95%$
+
+- Mean Difference:              $5.93$
+
+- p-value: $0.00823$ **<** $0.05$
+
+- Null hypothesis: *would be rejected* (mean difference is not $0$)
+
+- The supplement *Orange Juice is more effective for this dose*.
+
+**(3) Orange Juice and Vitamin C effectiveness - Dose 2 mg:**
+- Confidence Interval:          $95%$
+
+- Mean Difference:              $-0.08$
+
+- p-value: $0.96696$ **>** $0.05$
+
+- Null hypothesis: *could not be rejected* (mean difference is almost $0$)
+
+- It 's not possible to conclude which supplement *Orange Juice* or *Vitamin C* is more effective for this dose.
+
+**(4) Supplement / Doses:** Higher doses, the more effective it is on the teeth growth without influence on the supplement.
+
+### Session Information
+```{r Session Information, echo = FALSE}
+sessionInfo()
+```
+
+```{r Delete Temporary Directories, echo = FALSE}
+# Delete the '#' sign before unlink() to delete temp files
+unlink("tmpDir", recursive = TRUE)
+```

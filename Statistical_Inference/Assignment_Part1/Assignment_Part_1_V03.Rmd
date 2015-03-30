@@ -1,0 +1,275 @@
+---
+title: "STATISTICAL INFERENCE - Peer Assignment"
+subtitle: Part 1 - Simulation Exercise
+output: html_document
+---
+Version: V00
+
+Date: 21-dec-2014
+
+GitHub Repository: https://github.com/A6111E/datasciencecoursera/tree/master/Statistical_Inference/Assignment_Part1
+
+#### Introduction:
+
+**Exponential Distribution:** is the probability distribution that describes the time between events in a Poisson process, i.e. a process in which events occur continuously and independently at a constant average rate. 
+
+The exponential distribution occurs naturally when describing the lengths of the inter-arrival times in a homogeneous Poisson process. Describes the time for a continuous process to change state.
+
+In real scenarios, the assumption of a constant rate (or probability per unit time) is rarely satisfied. 
+
+For example, the rate of incoming phone calls differs according to the time of day. But if we focus on a time interval during which the rate is roughly constant, such as from 2 to 4 p.m. during work days, the exponential distribution can be used as a good approximate model for the time until the next phone call arrives. 
+
+Examples which yield approximately exponentially distributed variables:
+
+- Time until a radioactive particle decays, or the time between clicks of a geiger counter. 
+
+- Time it takes before your next telephone call
+
+Exponential variables can also be used to model situations where certain events occur with a constant probability per unit length, such as the distance between mutations on a DNA strand, or between roadkills on a given road.
+
+**Expected Value:** the mean or expected value of an exponentially distributed random variable $X$ with rate parameter $lambda$ is given by:
+
+$E[X] = 1/lambda = beta$
+
+**Variance:** $Var[X] = 1/lambda^2$
+
+**Standard Deviation (is equal to the mean):** $sd[X] = 1/lambda = beta$
+
+**Mean Standard Error:** $se[X] = sd/sqrt(1/n)$
+
+**Sample Mean:** $Sample_Mean [X] = 1/sample.size(sum(xi))$
+
+**t Confidence Interval:** $t Confidence Interval= E[X] +/- t(n-1) × sd/sqrt(n)$
+
+*Partial Source:* http://en.wikipedia.org/wiki/Exponential_distribution
+
+### Data Processing:
+```{r Call required libraries, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+require(data.table)             # Data Table
+require(ggplot2)                # Plotting
+require(xtable)                 # For generating tables knitr
+require(knitr)                  # Markdown
+require(gridExtra)              # Grid for graphics
+```
+
+```{r knitr Setup, include = FALSE, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+
+opts_chunk$set(
+        fig.path = "graphs/plot_",                                         
+        fig.height = 5, fig.width = 5, 
+        options(scipen = 1, digits = 2),
+        cache.path = "cache/",
+        cache = FALSE
+        )
+```
+
+```{r Clean Up Workspace, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+rm(list = ls())
+gc()
+```
+
+```{r Creates Working Directories, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+dir.create("data")              # Source Data
+dir.create("docs")              # Document files
+dir.create("reports")           # Report files
+
+# Other Directories: created by code (graphs / cache)
+```
+
+#### Data Set
+```{r Data Set Exponential Distribution, results = "hide", echo = FALSE}
+system.time({
+set.seed(12345)
+lambda <- 0.2                           # rate parameter Exponential Distribution
+sample.size <- 40                       # sample size
+nosim <- 1000                           # simulation number
+
+# Mean - mu 
+mu <- 1/lambda
+
+# Variance - S2 
+S2 <- 1/lambda^2
+
+# Standard Deviation
+sd = 1/lambda
+
+# Standard Error
+se = (1/lambda)/sqrt(sample.size)
+
+# t Confidence Intervals - 97.5%
+ciup <- mu + qt(.975, sample.size - 1) * sd / sqrt(sample.size)
+cidown <- mu - qt(.975, sample.size - 1) * sd / sqrt(sample.size)
+
+# Generates Data Tables
+st <- replicate(nosim,rexp(sample.size,lambda))
+p <- NULL
+
+for (i in 1:nosim){
+        p[i] <- mean(st[,i])
+        }
+})
+```
+
+```{r Tidy Dataset, results = "hide", echo = FALSE}
+system.time({
+colNames <- NULL        
+for (i in 1:nosim){
+        colNames[i] <- paste("Trial_", i, sep ="")
+        }
+
+# DataSet 1000 Samples x 40 Observations
+DT <- as.data.table(st)
+setnames(DT,colNames)
+
+write.table(DT, "./reports/Data_Set_1000Samples_40Observations.txt", row.names = FALSE , 
+            sep = ",")
+
+# DataSet Mean for each Sample
+colNames <- c("Sample_Mean")
+DT1 <- as.data.table(p)
+setnames(DT1,colNames)
+
+DT1$Trial <- c(1:length(p))
+
+write.table(DT1, "./reports/Data_Set_Mean_Sample.txt", row.names = FALSE , 
+            sep = ",")
+})
+```
+
+#### Table: Summary Simulation Random Exponential Distribution 
+##### Simulations = 1000 - Sample Size = 40 - lambda = 0.2
+```{r Summary Simulation Data Exponential Distribution 2, echo = TRUE, results = "asis", tidy = FALSE}
+
+colNames <- c("Trial_1", "Trial_100", "Trial_500", "Trial_750", "Trial_1000")
+pr1 <- DT[ , colNames, with = FALSE]
+
+xt <- xtable(summary(pr1))
+print(xt, type = "html", floating = FALSE)
+```
+
+#### Table: Mean Value for each Simulation
+```{r Summary Raw Data, echo = TRUE, results = "asis", tidy = FALSE}
+xt <- xtable(DT1[1:10, ], digits = 2)
+print(xt, type = "html", include.rownames = FALSE, hline.after=c(1), floating = FALSE)
+```
+
+#### Graphic: Random Exponential Distribution 
+```{r Random Exponential Distribution ~ Mean, echo = TRUE}
+theo_center <- mu               # distribution theoretical center
+cal_center <- mean(p)           # distribution calculated center
+
+p1 <- ggplot(DT1, aes(x = Sample_Mean))
+        p1 <- p1 + geom_histogram(fill = "blue",
+                                binwidth = 0.25, aes(y = ..density..), colour = "black")
+        p1 <- p1 + geom_vline(xintercept = theo_center, size = 0.75, colour = "red")
+        p1 <- p1 + geom_vline(xintercept = cal_center, size = 0.75, colour = "green")
+        mse <- round(cal_center, 3)
+        p1 <- p1 + labs(title = paste("theo_center=", theo_center, "cal_center =", mse))
+        p1 <- p1 + labs(subtitle = paste("red", "green"))
+grid.arrange(p1, ncol = 1)
+```
+
+Remarks:
+
+- Red Vertical Line: distribution theoretical center
+
+- Green Vertical Line: distribution calculated center 
+
+##### Q1 - Results:
+```{r Q1-Results , echo = FALSE, tidy = FALSE}
+theo_center <- mu               # distribution theoretical center
+cal_center <- mean(p)           # distribution calculated center
+```
+
+The calculated center from 1000 simulations for $40$ exponential distributions with $lambda = 0.2$, is approximately $5$, which corresponds to theoretical center of distribution ($E[X] = 1/lambda = 5$). 
+
+Increasing the simulations, the calculated gets closer to theoretical center.
+
+**A. Theoretical Center:**              $`r theo_center`$
+
+**B. Calculated Center:**               $`r cal_center`$
+
+##### Q2 - Results:
+```{r Q2-Results 1, echo = FALSE, tidy = FALSE}
+vec_data <- as.vector(as.matrix(DT))           # all data as a vector
+theo_var <- S2                                  # distribution theoretical variance
+cal_var <- var(vec_data)                        # distribution calculated variance
+```
+
+The calculated variance from $1000$ simulations for $40$ exponential distributions samples  with $lambda = 0.2$ and theoretical variance $Var[X] = 1/lambda^2$ are:
+
+**A. Theoretical Variance:**            $`r theo_var`$
+
+**B. Calculated Variance:**             $`r cal_var`$
+
+Increasing the simulations, the calculated gets near to theoretical variance, and the exponential distributions trend to be a standard normal distribution.
+
+For example:
+
+A. The calculated variance from $1$ simulation for $40$ exponential distributions random variables is $41.9$ (for this simulation).
+
+B. The theoretical variance $Var[X] = 1/lambda^2$, is $`r theo_var`$  
+
+Decreasing the simulations, the calculated variance gets far away to theoretical variance, and the exponential distributions trend NOT to be a standard normal distribution.
+
+##### Q3 - Results:
+```{r Q3-Results , echo = FALSE, tidy = FALSE}
+cal_sd <- sd(DT1$Sample_Mean)   # distribution standard deviation
+cal_center <- mean(p)           # distribution calculated center
+
+# Sample_Means values between cal_center and +/- 1cal_sd (68%)
+x <- p[p >= (cal_center - cal_sd) & p <= (cal_center + cal_sd)]
+cal_sdx <- (round(length(x)/length(p),3))*100
+
+# Sample_Means values between cal_center and +/- 2cal_sd (95%)
+y <- p[p >= (cal_center - 2*cal_sd) & p <= (cal_center + 2*cal_sd)]
+cal_sdy <- (round(length(y)/length(p),3))*100 
+
+# Sample_Means values between cal_center and +/- 3cal_sd (99%)
+z <- p[p >= (cal_center - 3*cal_sd) & p <= (cal_center + 3*cal_sd)]
+cal_sdz <- (round(length(z)/length(p),3))*100
+
+# t Confidence Intervals - 95%
+ciup_cal <- cal_center + qt(.95, nosim - 1) * cal_sd / sqrt(nosim)
+cidown_cal <- cal_center - qt(.95, nosim - 1) * cal_sd / sqrt(nosim)
+```
+
+#### Graphic: Random Exponential Distribution ~ Standard Normal Distribution 
+```{r Random Exponential Distribution ~ Standard Normal, echo = TRUE}
+
+p3 <- ggplot(DT1, aes(x = Sample_Mean))
+        p3 <- p3 + geom_histogram(fill = "blue",
+                                binwidth = 0.25, aes(y = ..density..), colour = "black")
+        p3 <- p3 + geom_density(size = 1.25, colour = "red")
+        mse <- round(cal_center, 3)
+        p3 <- p3 + labs(title = paste('theo_center = ', mu, ' cal_center = ', mse))
+grid.arrange(p3, ncol = 1)
+```
+
+For a standard normal distribution, $68%$, $95%$ and $99%$ of the normal density, lies within $1$, $2$ and $3$ standard deviations from the mean, respectively
+
+The calculted percentage from the sample means of the exponential distribution ($lambda = 0.2$) are:
+
+**A. Percentage of Values between +/-1 Standard Deviation:**         $`r cal_sdx`% / 68%$
+
+**B. Percentage of Values between +/-2 Standard Deviation:**         $`r cal_sdy`% / 95%$
+
+**C. Percentage of Values between +/-3 Standard Deviation:**         $`r cal_sdz`% / 99%$
+
+Both, the graphic "Random Exponential Distribution ~ Standard Normal Distribution", and the calculated percentage values, indicates that if the sample trend to be infinite, the random exponential distribution will convert to a standard normal distribution.
+
+The confidence interval for the quantification of uncertainty in the exponential dsitribution is:
+
+**A. Confidence Interval 95% - Up:**                       $`r ciup_cal`$            
+
+**B. Confidence Interval 95% - Down:**                     $`r cidown_cal`$
+
+### Session Information
+```{r Session Information, echo = FALSE}
+sessionInfo()
+```
+
+```{r Delete Temporary Directories, echo = FALSE}
+# Delete the '#' sign before unlink() to delete temp files
+unlink("tmpDir", recursive = TRUE)
+```
