@@ -1,0 +1,547 @@
+---
+title: "Milestone Report"
+subtitle: "Word Prediction"
+output: html_document
+---
+Version: V01
+
+Date: 29-MAR-2015
+
+GitHub Repository: https://github.com/A6111E/datasciencecoursera/tree/master/Capstone_Project/Milestone_Report
+
+### Synopsis:
+The principal steps for this project are:
+
+- Exploratory Analysis: through a markdown report "Milestone Report - Word Prediction".
+
+- Create a language prediction algorithm.
+
+- Create a Shiny App as interface of the language model that can be access by others, taking as input a phrase (multiple words) in a text box input and outputs a prediction of the next word.
+
+
+### Source:
+For viewing the code for generating this markdown document, please refer to the  
+GitHub Repository.
+
+```{r Call required libraries, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+library(knitr)                  # Markdown
+```
+
+```{r knitr Setup, include = FALSE, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+
+opts_chunk$set(
+        fig.path = "graphs/plot_",                                         
+        fig.height = 5, fig.width = 10, 
+        options(scipen = 3, digits = 4),
+        cache.path = "cache/",
+        cache = FALSE
+        )
+```
+
+```{r Clean Up Workspace_1, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE}
+rm(list = ls())
+gc()
+```
+
+```{r Creates Working Directories, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = FALSE}
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Capstone_Project/Assignment_files")
+
+# Creates Directories
+dir.create("data")              # Source Data
+dir.create("results")           # Result files
+
+# Other Directories: created by code (graphs / cache)
+```
+
+### Exploratory Analysis
+```{r DataSets_Characteristics, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE, , cache = TRUE}
+system.time({
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Capstone_Project/Assignment_files")
+        
+# Get Temporary Directory
+tmpdir <- tempdir()
+        
+# Unzip Data Sets - English
+unzip(file.path("data", "en_US.zip", fsep = .Platform$file.sep), exdir = tmpdir)
+
+# Get / Define path & name of the unzipped files
+en_blogs <- file.path(tmpdir, "en_US.blogs.txt", fsep = .Platform$file.sep)
+en_news <- file.path(tmpdir, "en_US.news.txt", fsep = .Platform$file.sep)
+en_twitter <- file.path(tmpdir, "en_US.twitter.txt", fsep = .Platform$file.sep)
+
+filelist <- c(list.files(file.path("results", fsep = .Platform$file.sep)))
+
+if (!("Data_Characteristics.csv" %in% filelist)){
+        
+        # Start writing to an output file
+        sink(file.path("results", "Data_Characteristics.csv", 
+                       fsep = .Platform$file.sep))
+
+        # File Size in MegaBytes
+        MByte_blog <- capture.output(print(object.size(readLines(en_blogs, 
+                        encoding ="UTF-8", skipNul = TRUE)), units = "Mb"))
+        cat("MByte_blog =", MByte_blog, ",")
+
+        MByte_news <- capture.output(print(object.size(readLines(en_news, 
+                        encoding ="UTF-8", skipNul = TRUE)), units="Mb"))
+        cat("MByte_news =", MByte_news, ",")
+
+        MByte_twitter <- capture.output(print(object.size(readLines(en_twitter,
+                        encoding ="UTF-8", skipNul = TRUE)), units="Mb"))
+        cat("MByte_twitter =", MByte_twitter, ",")
+
+        # Lines
+        Lines_blog <- length(readLines(en_blogs, encoding ="UTF-8", skipNul = TRUE))
+        cat("Lines_blog =", Lines_blog, ",")
+
+        Lines_news <- length(readLines(en_news, encoding ="UTF-8", skipNul = TRUE))
+        cat("Lines_news =", Lines_news, ",")
+
+        Lines_twitter <- length(readLines(en_twitter, encoding ="UTF-8", 
+                                skipNul = TRUE))
+        cat("Lines_twitter =", Lines_twitter, ",")
+
+        # Word Number
+        Words_blog <- length(unlist(strsplit(readLines(en_blogs, encoding ="UTF-8", 
+                        skipNul = TRUE)," ")))
+        cat("Words_blog =", Words_blog, ",")
+
+        Words_news <- length(unlist(strsplit(readLines(en_news, encoding ="UTF-8", 
+                        skipNul = TRUE)," ")))
+        cat("Words_news =", Words_news, ",")
+
+        Words_twitter <- length(unlist(strsplit(readLines(en_twitter, 
+                        encoding ="UTF-8",skipNul = TRUE)," ")))
+        cat("Words_twitter =", Words_twitter, ",")
+
+        # Totals
+        Total_Lines <- sum(Lines_blog, Lines_news, Lines_twitter)
+        cat("Total_Lines =", Total_Lines, ",")
+
+        Total_Words <- sum(Words_blog, Words_news, Words_twitter)
+        cat("Total_Words =", Total_Words)
+
+        # Stop writing to an output file
+        sink()
+        
+        } else {
+                # Read Results
+                data <- read.csv(file.path("results", "Data_Characteristics.csv", 
+                        fsep = .Platform$file.sep), header = FALSE, sep = ",")
+                data <- c(data)
+                
+                # File Size in MegaBytes
+                MByte_blog <- data[1]
+                MByte_news <- data[2]
+                MByte_twitter <- data[3]
+                
+                # Lines 
+                Lines_blog <- data[4]
+                Lines_news <- data[5]        
+                Lines_twitter <- data[6] 
+                
+                # Word Number
+                Words_blog <- data[7]
+                Words_news <- data[8]
+                Words_twitter <- data[9]
+
+                # Totals
+                Total_Lines <- data[10]
+                Total_Words <- data[11]
+                }
+})
+```
+
+**DataSet Description:**
+Data, from a corpus called HC Corpora (http://www.corpora.heliohost.org). 
+
+Collected from numerous different sources, for getting a varied and comprehensive corpus of current use on different languages.
+ 
+Sources, such as newspapers, magazines, personal and professional blogs and Twitter updates.
+
+**Dataset:** 
+
+- Can be downloaded from: https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip
+
+- Each dataset compose from 3 corpus groups: blogs, news, twitter  
+
+- Available languages:
+a. **en_US:** English USA
+b. **de_DE:** standard German
+c. **fi_FI:** Finnish
+d. **ru_RU:** Russian
+
+**Other Languages:**
+
+For this Beta version, the complete analysis / prediction / application will be done for English only, but easily replicable due to the programming methodology, changing only the word "en" by "de" for example.
+
+**English Language:**
+
+- File: en_US.blogs.txt
+a. **File Size:** $`r MByte_blog`$
+b. **Text Lines:** $`r Lines_blog`$ 
+c. **Word Number:** $`r Words_blog`$
+
+- File: en_US.news.txt
+a. **File Size:** $`r MByte_news`$
+b. **Text Lines:** $`r Lines_news`$ 
+c. **Word Number:** $`r Words_news`$ 
+
+- File: en_US.twitter.txt
+a. **File Size:** $`r MByte_twitter`$
+b. **Text Lines:** $`r Lines_twitter`$
+c. **Word Number:** $`r Words_twitter`$
+
+**Considerations:**
+
+For a total file size of $569$ Mb, with $`r Total_Lines`$ lines and  $`r Total_Words`$ words, the 3 working datasets will be randomly sample with the rbinom() function (random generation binomial distribution), assuming "flip a biased or unfair coin" to determine whether a line of text will be sample or not.
+
+A fair coin, the probability of falling on either side (heads / tails) when it is tossed is approximately $50%$.
+
+For this case (unfair coin), the probability whether a line of text on the 3 files will be sample or not, is less than $50%$. 
+
+For an initial Exploratory Analysis, only $1%$ of the lines for each data set will be sample. Later, and during the development of the "shiny" application, this % would be increase or decreased according with the memory capacity.
+
+- Sample Parameters:
+a. Number of Observations: $1$% x lines per file (blogs, news, twitter)
+b. Number of Trials: lines per file (blogs, news, twitter)
+c. Probability: $0.3$
+
+After sampling the $3$ data sets, the samples will be merged in one single data set for  further analysis.
+
+```{r Sampling DataSets, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE, cache = TRUE}
+system.time({
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Capstone_Project/Assignment_files")
+                
+# Generate Random Numbers 
+prob <- 0.3
+percentage <- 0.01
+
+sampling <- function(name, file){
+        # Read Files and convert to "latin1"
+        data <- readLines(unlist(strsplit(file, split = "\\s")), 
+                          encoding ="UTF-8", skipNul = TRUE, warn = TRUE)
+        data <- iconv(data, from = "UTF-8", to = "latin1", sub = "")
+        
+        # Sample
+        set.seed(12345)
+        data <- data[rbinom(length(data)*percentage, length(data), prob)]
+        data <- c(data)
+        
+        # Write to results
+        writeLines(data, file.path("results", name, fsep = .Platform$file.sep))
+        }
+
+# Obtain File List
+filelist <- c(list.files(file.path("results", fsep = .Platform$file.sep)))
+
+# Sample Blogs
+if (!("en_blogs_sample.txt" %in% filelist)){
+        sampling ("en_blogs_sample.txt", en_blogs)
+        }
+
+# Sample News
+if (!("en_news_sample.txt" %in% filelist)){
+        sampling ("en_news_sample.txt", en_news)
+        }
+
+# Sample Twitter
+if (!("en_twitter_sample.txt" %in% filelist)){
+        sampling ("en_twitter_sample.txt", en_twitter)
+        }
+
+# Merge Samples
+merged_samples <- c(readLines(file.path("results", "en_blogs_sample.txt", 
+                                        fsep = .Platform$file.sep)), 
+                    readLines(file.path("results", "en_news_sample.txt", 
+                                        fsep = .Platform$file.sep)), 
+                    readLines(file.path("results", "en_twitter_sample.txt", 
+                                        fsep = .Platform$file.sep)))
+
+writeLines(merged_samples, file.path("results", "merged_samples.txt", 
+                                     fsep = .Platform$file.sep))
+
+})
+```
+
+```{r Detecting Emojies on Datasets, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE, cache = TRUE}
+system.time({
+library(plyr)                   # Tools for splitting, applying and combining data
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Capstone_Project/Assignment_files")
+
+# Obtain File List 
+filelist <- c(list.files(file.path("results", fsep = .Platform$file.sep)))
+
+if (!("emojies_summary.csv" %in% filelist)){
+        
+        # Write as Table
+        # Scan Emojies Text File
+        emojies <- NULL
+        emojies <- scan(file.path("data", "emojies.txt", fsep = .Platform$file.sep), 
+                        what = "", sep = "\n")
+                
+        # Loop for Emojies Quantity Calculation
+        answerdata <- NULL
+
+        # Defining Dataframe
+        n <- length(emojies)
+        answerdata <- data.frame(Emoji = character(n), quantity = numeric(n),
+                                 stringsAsFactors = FALSE)
+
+        colnames(answerdata) <- c("Emoji", "quantity")
+
+        for(i in 1:n){
+                x <- emojies[i]
+                y <- paste (x)
+                
+                emoji_qty <- length(grep(y, readLines(file.path("results", 
+                                "merged_samples.txt", fsep = .Platform$file.sep)),
+                                value = TRUE, fixed = TRUE))
+
+                # Data Frames with Data & Results
+                answerdata$Emoji[i] <- as.character(x)
+                answerdata$quantity[i] <- as.numeric(emoji_qty)
+                }
+
+        # Sort
+        arrange(answerdata, quantity)        # Use arrange from plyr package
+        answerdata[order(-answerdata$quantity), ]         # Use built
+
+        # Write to results
+        write.table(answerdata, file.path("results", "emojies_summary.csv", 
+                fsep = .Platform$file.sep), row.names = FALSE , col.names = TRUE, 
+                sep = ",")
+        }
+
+})
+```
+
+### Emojies
+
+Specially on the twitter data set, multiple emojis were found.  On this exploratory phase, an analysis from emojis were performed according with a list of the most common Emojis used (44 Emojis).
+
+### Table 1: Emojies Summary
+```{r Table_1, echo = FALSE, results = "asis", tidy = FALSE, errors = TRUE}
+# Print Model Summary
+library(xtable)                 # For generating tables knitr
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Capstone_Project/Assignment_files")
+
+data <- read.csv(file.path("results", "emojies_summary.csv", 
+                           fsep = .Platform$file.sep), header = FALSE, sep = ",")
+        
+xt <- xtable(head(data, 10), caption = "")
+print(xt, type = "html", floating = TRUE, caption.placement = "bottom")
+```
+
+
+For emoji graph refer to: http://unicodey.com/emoji-data/table.htm
+
+### Remarks:
+- On an initial Exploratory Analysis of each data sets, $92$% of the Emojis are coming from the raw en_twitter data set.
+
+- The writing style is not the same between datasets (blogs, news, twitter) and depends on several factors like country / region, education level from the user, and the application (for example twitter, Emails, Blogs, etc).
+
+- For twitter, due to the restriction of # of letters, normally abbreviations are used.
+
+### SwiftKey Version 5.2.2.124 for Android Benchmark:
+
+Source: http://swiftkey.com/en
+
+SwiftKey is an on-screen keyboard that adapts to the way the user type.
+
+Features: the most important features are:
+
+- Typing Less: learns the writing style to suggest / predict what the users are going to type next. Entering a whole word with a single tap, instead of typing letter by letter. 
+ 
+ - Learns from a user's language style to make the predictions personal.
+
+- Typing more Accurately: auto correction based on the personal writing style, even inserting missed spaces.
+
+- Typing Easily: switch between different keyboard layouts (over 30).
+
+- Typing up to three Languages: at once, without changing any settings.
+
+- Typing with Emoticons: over 800 emoticons characters and clever prediction of them.
+
+- Can access the Twitter, Facebook, and Gmail accounts to fine-tune its prediction engine to the user's unique mode of speech / write.
+
+- Daily delivered update with the hottest words and phrases.
+
+- Backup and Sync across devices.
+
+- Keyboard for Android and IOS.
+
+- Best 2014 App.
+
+- For Android:
+a. App: $34$ mB
+b. Ram Memory Usage: high processor/memory usage. On a $512$ mB Ram cellular phone, the SwiftKey App slows its performance.
+
+What are the best Android soft keyboards?
+
+http://www.slant.co/topics/1277/compare/~swiftkey_vs_google-keyboard_vs_fleksy
+
+The developed Shiny-App, on its beta version will have some of these features. Other features could be added later. 
+
+```{r Convert to Corpus, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE, cache = TRUE}
+system.time({
+
+# Required Libraries
+library(tm)                     # Text Mining
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Capstone_Project/Assignment_files")
+
+# Convert to Corpus
+corpus <- VCorpus(VectorSource(readLines(file.path("results", "merged_samples.txt", 
+        fsep = .Platform$file.sep))))
+
+# Save Corpus.RData for later use
+save(corpus, file = file.path("results", "corpus.RData", fsep = .Platform$file.sep))
+
+})
+```
+
+### Merged Sample Data Set Transformation
+
+The "tm" R package was used, according with the description of the "Journal of Statistical Software" - Text Mining Infrastructure in R - from March 2008, and web benchmark. The following transformation were done:
+
+a. Remove Numbers
+b. Remove Punctuation Marks
+c. Remove Stop words
+d. Remove affixes from words (for example, "run", "runs", "running" all become "run")
+e. Remove extra White Spaces
+f. Convert to lower Case Letters
+g. Remove profanity words: according with list on the following source (https://github.com/shutterstock/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/)
+
+### Table 2: Frequency Terms Summary
+```{r DataSets Transformation_01, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, errors = TRUE, cache = TRUE}
+system.time({
+
+# Required Libraries
+library(tm)                     # Text Mining
+library(qdap)                   # Qualitative Data and Quantitative Analysis
+library(xtable)                 # For generating tables knitr
+library(RWeka)
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Capstone_Project/Assignment_files")
+
+# Load Corpus
+load(file.path("results", "corpus.RData", fsep = .Platform$file.sep))
+
+# Document Term Matrix
+trans_corpus_DTM <- DocumentTermMatrix(corpus)
+
+# DTM - Terms which do not occur very often
+trans_corpus_DTM <- removeSparseTerms(trans_corpus_DTM, 0.99)
+
+# Identifying Frequent Items and Associations
+findFreqTerms(trans_corpus_DTM, lowfreq = 100)
+findAssocs(trans_corpus_DTM, "love", corlimit = 0.6)
+
+listFreqTerms <- list(findFreqTerms(trans_corpus_DTM, lowfreq = 20, 
+                                    highfreq = Inf))
+
+# Term Frequency
+freq <- sort(colSums(as.matrix(trans_corpus_DTM)), decreasing = TRUE)
+termFreq <- data.frame(word = names(freq), freq = freq)
+termFreq_1 <- data.frame(freq = freq)
+
+})
+```
+
+```{r DataSets Transformation_02, echo = FALSE, results = "asis", warning = FALSE, message = FALSE, errors = TRUE, cache = TRUE}
+xt <- xtable(head(termFreq_1, 10), caption = "Top Ten Terms")
+print(xt, type = "html", floating = TRUE, caption.placement = "bottom")
+```
+
+
+#### Graphic 1: Correlation & Frequency Terms
+```{r Graph_DataSets, echo = FALSE, results = "hide", warning = FALSE, message = FALSE, tidy = FALSE, errors = TRUE}
+
+# Required Libraries
+library(ggplot2)                # Plotting
+library(gridExtra)              # Grid on Graphs
+library(tm)                     # Text Mining
+library(Rgraphviz)
+library(qdap)                   # Qualitative Data and Quantitative Analysis
+
+# Set the working directory
+path.expand("~")
+setwd("~/Data_Analysis/Coursera/Capstone_Project/Assignment_files")
+
+g1 <- plot(trans_corpus_DTM, corThreshold = 0.05, weighting = TRUE, 
+           main = "Correlation between Words")
+
+g1
+
+g2 <- ggplot(head(subset(termFreq, freq > 500), 30), aes(word, freq)) 
+g2 <- g2 + geom_bar(width = 0.8, fill="blue", colour="black", stat = "identity",
+                    position = position_dodge(width=0.3)) + coord_flip() + 
+        xlab("Word Frequency") +
+        ylab("")
+
+grid.arrange(g2, main = "Frequency Terms")
+```
+
+### Further Steps
+
+**A1:** n-grams
+
+a. uni and bi grams initially (according with memory capacity, n-grams could be increased).
+
+b. The uni and bi grams will be saved as data frames for later use on the Language Prediction Model.
+
+c. Using adding the log probabilities to minimize underflow.
+
+Source: https://class.coursera.org/nlp/lecture (based on Markov Assumptions)
+
+**A2:** Misspellings
+
+a. Define a method for misspelling language corrections.  
+
+**A3:** Language Prediction Models
+
+a. General Prediction Algorithm: for the merged sample data set, increasing the sample percentage according with memory restrictions and processing time, loading the n-grams data frames
+
+b. User Prediction Algorithm: the writing style, user own words and application (twitter, E-Mail, blogs, etc). This algorithm, with a defined memory capacity, where the input text from the user will append to a text file. The text file, will be used for generating the User Prediction Algorithm and with misspelling language corrections.  
+
+**A4:** Shiny-App
+
+a. With 1 input text box, where the user will type its input phrase.
+
+b. With 3 output text boxes, where the first 2 output boxes, for the prediction coming from the General Prediction Algorithm, and the 3rd from the User Prediction Algorithm.
+
+
+### Session Information
+```{r Session Information, echo = FALSE}
+sessionInfo()
+```
+
+```{r Delete Temporary Directories, echo = FALSE}
+# Delete the '#' sign before unlink() to delete temp files
+unlink("tmpDir", recursive = TRUE)
+```
+
+```{r Clean Up Workspace_2, echo = FALSE, results = "hide", warning = FALSE, message = FALSE}
+rm(list = ls())
+gc()
+```
